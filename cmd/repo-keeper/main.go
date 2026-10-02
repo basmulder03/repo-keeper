@@ -4,9 +4,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+
+	"github.com/basmulder03/repo-keeper/internal/clock"
+	"github.com/basmulder03/repo-keeper/internal/gitx"
 )
 
 // Set at build time via -ldflags "-X main.version=...".
@@ -16,36 +21,54 @@ var (
 )
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	a := &app{out: os.Stdout, err: os.Stderr, newRunner: gitx.New, clock: clock.Real{}}
+	os.Exit(a.run(ctx, os.Args[1:]))
 }
 
 // run dispatches subcommands and returns the process exit code.
-func run(args []string, stdout, stderr io.Writer) int {
+func (a *app) run(ctx context.Context, args []string) int {
 	if len(args) == 0 {
-		usage(stderr)
+		usage(a.err)
 		return 2
 	}
+	rest := args[1:]
 	switch args[0] {
+	case "sync":
+		return a.cmdSync(ctx, rest)
+	case "cleanup":
+		return a.cmdCleanup(ctx, rest)
+	case "restore":
+		return a.cmdRestore(ctx, rest)
+	case "audit":
+		return a.cmdAudit(ctx, rest)
+	case "doctor":
+		return a.cmdDoctor(ctx, rest)
 	case "version", "--version", "-v":
-		_, _ = fmt.Fprintf(stdout, "repo-keeper %s (%s)\n", version, commit)
+		a.printf("repo-keeper %s (%s)\n", version, commit)
 		return 0
 	case "help", "--help", "-h":
-		usage(stdout)
+		usage(a.out)
 		return 0
 	default:
-		_, _ = fmt.Fprintf(stderr, "repo-keeper: unknown command %q\n\n", args[0])
-		usage(stderr)
+		_, _ = fmt.Fprintf(a.err, "repo-keeper: unknown command %q\n\n", args[0])
+		usage(a.err)
 		return 2
 	}
 }
 
 func usage(w io.Writer) {
-	_, _ = fmt.Fprint(w, `Usage: repo-keeper <command>
+	_, _ = fmt.Fprint(w, `Usage: repo-keeper <command> [flags]
 
 Commands:
-  version   print version
-  help      show this help
+  sync <repo>             fetch, fast-forward the default branch, optionally clean merged branches
+  cleanup <repo>          evaluate/delete merged local branches (dry-run unless --cleanup=auto)
+  restore <repo> <branch> bring back a branch deleted by cleanup (kept 30 days)
+  audit                   show the journal of deletions, restores and blocked cleanups
+  doctor                  check git version and state directory
+  version                 print version
 
-More commands (daemon, ui, sync, ...) arrive in later milestones.
+Run "repo-keeper <command> -h" for flags. Daemon, UI and provider discovery arrive in later milestones.
 `)
 }

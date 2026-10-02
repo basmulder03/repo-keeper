@@ -40,7 +40,10 @@
 | `httpx` | HTTP client: UA, timeouts, retries, ETag cache, rate-limit header parsing |
 | `ratelimit` | Per-host token bucket, cooldowns, circuit breaker, budget tracking |
 | `gitx` | Run git safely: env sanitising, hooks off, askpass, timeouts, output parsing |
-| `sync` | Per-repo state machine: discover → clone/fetch → fast-forward → cleanup |
+| `syncer` | Per-repo flow: lock → safety checks → ls-remote → fetch → fast-forward → cleanup (named `syncer` to avoid clashing with stdlib `sync`) |
+| `audit` | Append-only journal (JSONL, fsynced) of deletions/restores/blocks; moves into SQLite `store` in M2 |
+| `paths` | Per-user state locations |
+| `gitxtest` | Test fixtures: isolated bare origin + clones |
 | `cleanup` | Pure safety predicate + executor + trash/restore |
 | `sched` | Cron-like scheduler, jitter, quiet hours, wake handling |
 | `store` | Migrations, repositories (accounts, repos, runs, events, trash) |
@@ -49,7 +52,7 @@
 | `svc` | OS autostart integration (systemd/launchd/Task Scheduler) |
 | `obs` | slog setup, redaction, in-memory ring buffer for UI log view |
 
-Dependency rule: `sync` and `cleanup` depend on **interfaces** (`Provider`, `Git`, `Clock`, `Store`) so all logic is unit-testable with fakes. `ui` depends only on `svc`-level service interfaces, never on `gitx` directly.
+Dependency rule: `syncer` and `cleanup` depend on **interfaces** (`Provider`, `Git`, `Clock`, `Store`) so all logic is unit-testable with fakes. `ui` depends only on `svc`-level service interfaces, never on `gitx` directly.
 
 ## 3. Provider interface
 
@@ -106,9 +109,15 @@ record run, schedule next (interval ± jitter), release lock
 ```
 
 ### Cleanup safety predicate (pure function; 100 % tested, property-tested)
-`safe(b) = !protected(b) ∧ !checkedOut(b) ∧ age(b) ≥ minAge ∧ noUnpushedCommits(b) ∧ (merged(b, D) ∨ (upstreamGone(b) ∧ (providerMerged(b) ∨ patchEquivalent(b, D))))`
+`delete(b) = !protected ∧ !default ∧ !current ∧ checkedOut=No ∧ tipAge ≥ minAge ∧ (hasUpstream ∨ allowNeverPushed) ∧ (merged(b, D) ∨ (upstreamGone ∧ (providerMergedTip ∨ patchEquivalent)))`
 
-Where `noUnpushedCommits` means every commit of `b` is reachable from some remote ref **or** from `D`. If any input is unknown → `false` (fail closed).
+- Every input is tri-state (`Yes/No/Unknown`); `Unknown` always means skip (fail closed). Zero-valued facts never delete.
+- `hasUpstream` guards fresh/empty branches: a branch created from `main` looks "merged" but was never pushed, so it needs `--allow-never-pushed`.
+- `providerMergedTip` means the provider reports a merged PR **whose head SHA equals the local tip**, so late local commits are never lost to a squash merge.
+- `patchEquivalent` (`git cherry`) only recognises single-commit squashes; multi-commit squashes need provider data (M3).
+- Before deleting, the executor re-reads the tip, re-checks `UniqueCommits == 0` for merged branches, writes the trash ref, **journals first (write-ahead; journal failure aborts)**, then deletes with `update-ref -d <ref> <expected-sha>`.
+- Dirty working tree (including untracked files), in-progress operations, or a held lock block all deletions in that repo; this is journaled as `blocked`.
+- The predicate is verified by an exhaustive enumeration of all fact combinations (not sampling) in `internal/cleanup/decide_test.go`.
 
 ## 6. Scheduling & rate limiting
 

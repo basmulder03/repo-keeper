@@ -46,13 +46,13 @@ Priority: **M** must (v1.0), **S** should, **C** could (post-1.0). Each requirem
 | ID | P | Requirement |
 |---|---|---|
 | FR-C1 | M | Delete **local** branches only when fully merged into the default branch (`git branch --merged`). |
-| FR-C2 | M | Detect squash/rebase merges: upstream gone **and** (provider reports PR merged **or** `git cherry` shows patch-equivalent). |
-| FR-C3 | M | Never delete: current branch, default branch, branches checked out in any worktree, protected globs (`release/*`, `develop`…), branches with unpushed/unmerged commits, branches younger than N days (default 7). |
+| FR-C2 | M | Detect squash/rebase merges: upstream gone **and** (provider reports PR merged **or** `git cherry` shows patch-equivalent); a provider "merged" signal counts only if the PR head SHA equals the local tip. |
+| FR-C3 | M | Never delete: current branch, branches never pushed (unless `--allow-never-pushed`), default branch, branches checked out in any worktree, protected globs (`release/*`, `develop`…), branches with unpushed/unmerged commits, branches younger than N days (default 7). |
 | FR-C4 | M | Cleanup mode is user-configurable globally and per repo: `off`, `dry-run`, `auto` (default `dry-run`). Safeguards (FR-C3) apply in every mode and cannot be disabled; a dirty working tree always blocks deletion in that repo. |
 | FR-C5 | M | Recoverable: before delete, record SHA in `refs/repo-keeper/trash/<name>` and journal; `repo-keeper restore <branch>`; trash expires after 30 d. |
 | FR-C6 | M | **Remote branches are never deleted.** repo-keeper only mutates local clones and requests no provider write scopes. |
 | FR-C7 | S | Report of "stale but unmerged" branches (informational only). |
-| FR-C8 | M | **Audit journal**: every deleted/skipped branch is recorded in state (repo, branch, SHA, reason, mode, timestamp), viewable and exportable in UI and CLI. |
+| FR-C8 | M | **Audit journal**: every deletion, restore, failed delete and blocked cleanup is appended (repo, branch, SHA, reason, mode, timestamp) before the action takes effect; viewable via `repo-keeper audit` (UI in M3). Per-branch skip reasons are in the run report, not journaled (they would repeat every cycle). |
 
 ### Scheduling & rate limiting
 | ID | P | Requirement |

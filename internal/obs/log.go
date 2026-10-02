@@ -83,3 +83,6 @@ func New(w io.Writer, level slog.Leveler, jsonFmt bool, r *Redactor) *slog.Logge
 	}
 	return slog.New(slog.NewTextHandler(out, opts))
 }
+
+// Scrub masks known token shapes in s using a registry-less Redactor.
+func Scrub(s string) string { return (&Redactor{}).Scrub(s) }

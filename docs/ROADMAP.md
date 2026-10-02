@@ -5,7 +5,7 @@ Ordering, not promises (one part-time maintainer). **Linux/NixOS first; GitHub f
 | Milestone | Theme | Exit criteria |
 |---|---|---|
 | **M0** Foundations | Repo, Nix devShell, CI (Linux; macOS/Windows build-only), conventions | CI green; lint/security gates; docs approved |
-| **M1** Local engine | `gitx`, default-branch detection, FF, all-branch fetch, cleanup + trash + audit journal | CLI syncs/cleans a local repo safely; property + integration tests; 100 % predicate coverage |
+| **M1** ✅ done: Local engine | `gitx`, default-branch detection, FF, all-branch fetch, cleanup + trash + audit journal | CLI syncs/cleans a local repo safely; property + integration tests; 100 % predicate coverage |
 | **M2** Rate limiting & scheduler | `httpx`, `ratelimit`, `sched`, daemon, single instance | 429/Retry-After honoured in simulation; kill -9 safe |
 | **M3** GitHub + UI (first usable) | GitHub discovery/auth (token, device flow BYO client id), merged-PR lookup, keychain, **web UI incl. debug page**, config editing, audit view | End-to-end sync of a real GitHub account within quota; CSRF/Host tests; axe clean; `repo-keeper ui` + runtime-file discovery |
 | **M3.5** Tray helper (Linux SNI) | `repo-keeper-tray`: status icon + menu | Works on KDE/GNOME-AppIndicator/waybar; daemon unaffected when absent |

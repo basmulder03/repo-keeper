@@ -6,7 +6,7 @@ Tests are written **with** the code (same PR), never after. A PR without tests f
 | Layer | Tooling | Scope |
 |---|---|---|
 | Unit | `testing`, `testify`, table-driven, fake `Clock`/`Git`/`Provider`/`Store` | Pure logic: cleanup predicate, default-branch detection, scheduler, rate limiter, config validation, redaction |
-| Property | `rapid` / `testing/quick` | Cleanup safety invariant: *never* selects current/default/worktree/unmerged/young branches for any generated repo graph |
+| Property / exhaustive | exhaustive enumeration (stdlib) | Cleanup safety invariant, checked over every fact combination: *never* selects current/default/worktree/unmerged/young branches for any generated repo graph |
 | Git integration | Real `git` in `t.TempDir()` with a local bare remote | Clone, fetch, FF, diverged, dirty, rename `master→main`, force-pushed remote, squash-merge, worktrees, locked index, submodules |
 | Provider contract | `httptest` + recorded fixtures (sanitised) | Pagination, ETag/304, 429/Retry-After, GitHub secondary limits, auth failure, renamed/deleted repos; UA header assertion |
 | Security | Custom | Hostile-repo fixture (malicious hooks, `core.fsmonitor`, symlinks, `..` names) executes nothing; canary token never appears in logs/argv/env/DB; UI CSRF/Host/Origin tests |
