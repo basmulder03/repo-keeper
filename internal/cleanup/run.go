@@ -31,6 +31,9 @@ type Git interface {
 	UpdateRef(ctx context.Context, ref, sha, old string) error
 }
 
+// MergedLookup returns branch -> head SHA of its merged PR for the given branches.
+type MergedLookup func(ctx context.Context, branches []string) (map[string]string, error)
+
 // Input configures one cleanup pass over one repository.
 type Input struct {
 	Git           Git
@@ -40,8 +43,8 @@ type Input struct {
 	Policy        Policy
 	Journal       audit.Journal
 	Clock         clock.Clock
-	// ProviderMerged maps branch -> head SHA of its merged PR (nil when no provider data).
-	ProviderMerged map[string]string
+	// ProviderMerged is queried lazily, only for upstream-gone branches git cannot prove merged.
+	ProviderMerged MergedLookup
 }
 
 // Outcome is what happened to one branch.
@@ -122,6 +125,8 @@ func Run(ctx context.Context, in Input) (Report, error) {
 		baseRef = "refs/heads/" + in.DefaultBranch
 	}
 
+	provMerged := in.lookupMerged(ctx, branches, merged, haveBase)
+
 	now := in.Clock.Now()
 	for _, b := range branches {
 		f := Facts{
@@ -132,7 +137,7 @@ func Run(ctx context.Context, in Input) (Report, error) {
 		if haveBase {
 			f.MergedIntoDefault = boolTri(merged[b.Name])
 		}
-		if head, ok := in.ProviderMerged[b.Name]; ok {
+		if head, ok := provMerged[b.Name]; ok {
 			f.ProviderMergedTip = boolTri(head == b.SHA)
 		}
 		if haveBase && !merged[b.Name] && b.UpstreamGone {
@@ -282,4 +287,25 @@ func hasOutcome(items []Item, o Outcome) bool {
 		}
 	}
 	return false
+}
+
+// lookupMerged asks the provider only about branches that could newly qualify; failures mean "unknown".
+func (in Input) lookupMerged(ctx context.Context, branches []gitx.Branch, merged map[string]bool, haveBase bool) map[string]string {
+	if in.ProviderMerged == nil || !haveBase {
+		return nil
+	}
+	var names []string
+	for _, b := range branches {
+		if b.UpstreamGone && !merged[b.Name] && b.Name != in.DefaultBranch {
+			names = append(names, b.Name)
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	m, err := in.ProviderMerged(ctx, names)
+	if err != nil {
+		return nil
+	}
+	return m
 }

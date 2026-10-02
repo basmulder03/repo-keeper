@@ -27,6 +27,12 @@
 | Self-hosted | GHES | self-managed | Data Center (separate API) | Server | ✔ | ✔ |
 
 ## GitHub (github.com, GHES)
+
+**Implemented (M3a).** Endpoints used, all documented REST: `GET /user` (auth, scopes, expiry), `GET /user/repos` (discovery, `per_page=100`, `Link` pagination, ETag), `GET /repos/{owner}/{repo}/pulls?state=closed` (only for upstream-deleted branches git cannot prove merged; at most 3 pages). Device flow: `POST /login/device/code`, `POST /login/oauth/access_token`. Requests carry `Authorization: Bearer`, `X-GitHub-Api-Version`, the project User-Agent; the token is never sent to a host other than the configured API host (pagination links to other hosts are refused).
+
+**Recommended credential:** a fine-grained personal access token with *read-only* `Contents`, `Metadata` and `Pull requests` on the repositories you want. Classic tokens need the broad `repo` scope for private repositories, so `accounts add` and `accounts check` warn about it. Device flow works best with a GitHub App (client id via `--client-id`, no scope, read-only permissions); **disable user-token expiration for that app**, because refreshing needs a client secret and repo-keeper deliberately ships none.
+
+**GitHub Enterprise Server:** `base_url = "https://ghe.example.com/api/v3"`, and `--web-url https://ghe.example.com` for device flow.
 - **Docs:** REST rate limits, "Best practices for using the REST API", Acceptable Use Policies, Terms of Service (Automated access / API terms). *Last verified: TBD at M3.*
 - **Auth:** fine-grained PAT (preferred, `Contents: read`, `Metadata: read`, `Pull requests: read`), OAuth device flow, GitHub App (installation token, higher limits and no user dependency).
 - **Limits (typical):** primary ~5 000 req/h per authenticated user (GraphQL has a separate point budget); unauthenticated far lower. **Secondary limits** (concurrency, requests/minute, content-creation) apply: keep to ≤ 1–2 concurrent requests, honour `Retry-After`.

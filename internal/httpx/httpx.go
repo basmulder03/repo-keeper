@@ -6,8 +6,10 @@ package httpx
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -153,7 +155,7 @@ func (c *Client) once(ctx context.Context, req *http.Request) (resp *Response, r
 	r.Header.Set("User-Agent", c.cfg.UserAgent)
 	key := ""
 	if r.Method == http.MethodGet {
-		key = r.URL.String()
+		key = cacheKey(r)
 		c.mu.Lock()
 		if e, ok := c.cache[key]; ok && r.Header.Get("If-None-Match") == "" {
 			r.Header.Set("If-None-Match", e.etag)
@@ -198,4 +200,10 @@ func (c *Client) once(ctx context.Context, req *http.Request) (resp *Response, r
 	retryable := hr.StatusCode == http.StatusTooManyRequests || hr.StatusCode >= 500 ||
 		(hr.StatusCode == http.StatusForbidden && hr.Header.Get("Retry-After") != "")
 	return out, retryable, nil
+}
+
+// cacheKey scopes cached bodies to the credential, so two accounts on one host never see each other's data.
+func cacheKey(r *http.Request) string {
+	sum := sha256.Sum256([]byte(r.Header.Get("Authorization")))
+	return hex.EncodeToString(sum[:8]) + " " + r.URL.String()
 }

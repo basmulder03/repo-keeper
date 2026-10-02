@@ -184,3 +184,33 @@ func TestDefaultTransport_NeverSkipsVerification(t *testing.T) {
 		t.Fatalf("custom CA should work: %v", err)
 	}
 }
+
+func TestDo_ETagCache_IsolatedPerCredential(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("ETag", `"x"`)
+		if r.Header.Get("If-None-Match") != "" {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		_, _ = w.Write([]byte("data-for-" + r.Header.Get("Authorization")))
+	}))
+	defer srv.Close()
+	c := newClient(t, nil)
+	do := func(auth string) *Response {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL, http.NoBody)
+		req.Header.Set("Authorization", auth)
+		resp, err := c.Do(t.Context(), req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+	do("alice")
+	bob := do("bob")
+	if bob.FromCache || string(bob.Body) != "data-for-bob" {
+		t.Fatalf("bob got %+v: cached data crossed credentials", bob)
+	}
+	if !do("alice").FromCache {
+		t.Fatal("alice's own cache should still work")
+	}
+}

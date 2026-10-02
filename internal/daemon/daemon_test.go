@@ -163,7 +163,7 @@ func TestDaemon_SyncsRepoOnScheduleAndRecordsState(t *testing.T) {
 	other := e.Clone("t1")
 	want := e.Commit(other, "x.txt", "x", "x")
 	e.Git(other, "push", "-q", "origin", "main")
-	r.clk.BlockUntil(2, time.Second)
+	r.clk.BlockUntil(3, time.Second)
 	r.clk.Advance(45 * time.Minute)
 	r.waitFor(t, "second sync", func() bool { rs := r.repos(t); return rs[0].LastSync.After(first) })
 	if got := e.Git(e.Work, "rev-parse", "main"); got != want {
@@ -213,7 +213,7 @@ func TestDaemon_ConfigReload_AddsRepoAndRejectsInvalid(t *testing.T) {
 
 	// invalid change is rejected and reported, previous config stays
 	writeCfg(t, r.cfgPath, "[general]\ninterval = \"1m\"")
-	r.clk.BlockUntil(2, time.Second)
+	r.clk.BlockUntil(3, time.Second)
 	r.clk.Advance(31 * time.Second)
 	r.waitFor(t, "config-invalid event", func() bool {
 		ev, _ := r.d.Store.RecentEvents(context.Background(), 20)
@@ -230,10 +230,10 @@ func TestDaemon_ConfigReload_AddsRepoAndRejectsInvalid(t *testing.T) {
 
 	// valid change adds the second repo (mtime/size must differ)
 	writeCfg(t, r.cfgPath, cfgFor(e.Work, e2)+"# changed\n")
-	r.clk.BlockUntil(2, time.Second)
+	r.clk.BlockUntil(3, time.Second)
 	r.clk.Advance(31 * time.Second)
 	r.waitFor(t, "second repo tracked", func() bool { return len(r.repos(t)) == 2 })
-	r.clk.BlockUntil(2, time.Second)
+	r.clk.BlockUntil(3, time.Second)
 	r.clk.Advance(time.Minute)
 	r.waitFor(t, "second repo synced", func() bool {
 		for _, x := range r.repos(t) {

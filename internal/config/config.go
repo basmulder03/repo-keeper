@@ -7,8 +7,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -19,6 +23,13 @@ import (
 
 // MinInterval is the hard floor so config can never make repo-keeper abusive (FR-R4).
 const MinInterval = 5 * time.Minute
+
+// MinDiscoveryInterval keeps repository listing (many API calls) politely infrequent.
+const MinDiscoveryInterval = time.Hour
+
+var accountName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+
+func isLoopback(h string) bool { ip := net.ParseIP(h); return ip != nil && ip.IsLoopback() }
 
 // Duration is a TOML-friendly time.Duration ("30m", "7d" is not supported by Go; use "168h").
 type Duration time.Duration
@@ -38,9 +49,10 @@ func (d Duration) MarshalText() ([]byte, error) { return []byte(time.Duration(d)
 
 // Config is the whole file.
 type Config struct {
-	General General `toml:"general"`
-	Cleanup Cleanup `toml:"cleanup"`
-	Repos   []Repo  `toml:"repo"`
+	General  General   `toml:"general"`
+	Cleanup  Cleanup   `toml:"cleanup"`
+	Repos    []Repo    `toml:"repo"`
+	Accounts []Account `toml:"account"`
 }
 
 // General holds scheduling behaviour.
@@ -50,6 +62,7 @@ type General struct {
 	PerHost     int      `toml:"per_host"`     // parallel operations per remote host (default 2)
 	QuietHours  string   `toml:"quiet_hours"`  // "23:00-07:00" local time; no scheduled syncs inside
 	AllBranches *bool    `toml:"all_branches"` // fetch all branches (default true)
+	Root        string   `toml:"root"`         // clone root for account-discovered repos (absolute)
 }
 
 // Cleanup is the global branch-cleanup policy.
@@ -58,6 +71,25 @@ type Cleanup struct {
 	MinAge           Duration `toml:"min_age"`
 	Protected        []string `toml:"protected"`
 	AllowNeverPushed bool     `toml:"allow_never_pushed"`
+}
+
+// Account is a platform login whose repositories are discovered and cloned automatically.
+type Account struct {
+	Name     string `toml:"name"`
+	Provider string `toml:"provider"` // github
+	BaseURL  string `toml:"base_url"` // API base, e.g. https://ghe.example.com/api/v3; default is the public cloud
+	// Credential source; with neither set the OS keychain entry "account/<name>" is used.
+	TokenEnv          string   `toml:"token_env"`
+	TokenFile         string   `toml:"token_file"`
+	Include           []string `toml:"include"` // globs on owner/name; empty = everything
+	Exclude           []string `toml:"exclude"`
+	SkipArchived      *bool    `toml:"skip_archived"` // default true
+	SkipForks         bool     `toml:"skip_forks"`
+	CloneProtocol     string   `toml:"clone_protocol"`     // https (default) | ssh
+	PartialClone      bool     `toml:"partial_clone"`      // blobless clones
+	DiscoveryInterval Duration `toml:"discovery_interval"` // default 6h, min 1h
+	Interval          Duration `toml:"interval"`           // per-repo sync interval override
+	CleanupMode       string   `toml:"cleanup"`            // overrides [cleanup].mode
 }
 
 // Repo is one tracked clone (provider discovery adds more in M3).
@@ -130,6 +162,53 @@ func (c Config) Validate() error {
 	}
 	if c.Cleanup.MinAge < 0 {
 		bad("cleanup.min_age must not be negative")
+	}
+	if c.General.Root != "" && !filepath.IsAbs(c.General.Root) {
+		bad("general.root must be an absolute path")
+	}
+	if len(c.Accounts) > 0 && c.General.Root == "" {
+		bad("general.root is required when accounts are configured")
+	}
+	names := map[string]bool{}
+	for i, a := range c.Accounts {
+		if !accountName.MatchString(a.Name) {
+			bad("account[%d].name %q must match [a-z0-9][a-z0-9_-]*", i, a.Name)
+		}
+		if names[a.Name] {
+			bad("account[%d].name %q is used twice", i, a.Name)
+		}
+		names[a.Name] = true
+		if a.Provider != "github" {
+			bad("account[%d].provider %q is not supported (github)", i, a.Provider)
+		}
+		if a.TokenEnv != "" && a.TokenFile != "" {
+			bad("account[%d]: set only one of token_env and token_file", i)
+		}
+		if a.TokenFile != "" && !filepath.IsAbs(a.TokenFile) {
+			bad("account[%d].token_file must be an absolute path", i)
+		}
+		if a.BaseURL != "" {
+			if u, err := url.Parse(a.BaseURL); err != nil || u.Host == "" || (u.Scheme != "https" && (u.Scheme != "http" || !isLoopback(u.Hostname()))) {
+				bad("account[%d].base_url must be https://... (plain http only for loopback)", i)
+			}
+		}
+		if a.CloneProtocol != "" && a.CloneProtocol != "https" && a.CloneProtocol != "ssh" {
+			bad("account[%d].clone_protocol must be https or ssh", i)
+		}
+		if a.DiscoveryInterval != 0 && time.Duration(a.DiscoveryInterval) < MinDiscoveryInterval {
+			bad("account[%d].discovery_interval is below the %v minimum", i, MinDiscoveryInterval)
+		}
+		if a.Interval != 0 && time.Duration(a.Interval) < MinInterval {
+			bad("account[%d].interval is below the %v minimum", i, MinInterval)
+		}
+		if a.CleanupMode != "" && !validMode(a.CleanupMode) {
+			bad("account[%d].cleanup %q must be off, dry-run or auto", i, a.CleanupMode)
+		}
+		for _, g := range append(append([]string{}, a.Include...), a.Exclude...) {
+			if _, err := path.Match(g, "x/y"); err != nil {
+				bad("account[%d]: invalid glob %q", i, g)
+			}
+		}
 	}
 	seen := map[string]bool{}
 	for i, r := range c.Repos {
@@ -206,6 +285,15 @@ protected = ["main", "master", "trunk", "develop", "dev", "staging", "production
 # [[repo]]
 # path = "/home/you/code/project"
 # cleanup = "auto"      # per-repo override
+
+# Discover and clone everything an account can access (repo-keeper accounts add ...):
+# [general]
+# root = "/home/you/code"
+# [[account]]
+# name = "personal"
+# provider = "github"
+# include = ["me/*", "my-org/*"]
+# exclude = ["*/archive-*"]
 `
 
 // QuietHours is a daily window during which scheduled syncs pause.
@@ -245,4 +333,36 @@ func (q QuietHours) Contains(t time.Time) bool {
 		return m >= q.start && m < q.end
 	}
 	return m >= q.start || m < q.end
+}
+
+// AccountSettings is an account with every default resolved.
+type AccountSettings struct {
+	Account
+	SkipArchivedRepos bool
+	Discovery         time.Duration
+	SyncInterval      time.Duration
+	Policy            cleanup.Policy
+	UseSSH            bool
+}
+
+// ResolveAccount merges global defaults into one account's settings.
+func (c Config) ResolveAccount(a Account) AccountSettings {
+	s := AccountSettings{
+		Account: a, SkipArchivedRepos: a.SkipArchived == nil || *a.SkipArchived,
+		Discovery: 6 * time.Hour, SyncInterval: time.Duration(c.General.Interval), UseSSH: a.CloneProtocol == "ssh",
+		Policy: cleanup.Policy{
+			Mode: cleanup.Mode(c.Cleanup.Mode), MinAge: time.Duration(c.Cleanup.MinAge),
+			Protected: c.Cleanup.Protected, AllowNeverPushed: c.Cleanup.AllowNeverPushed,
+		},
+	}
+	if a.DiscoveryInterval != 0 {
+		s.Discovery = time.Duration(a.DiscoveryInterval)
+	}
+	if a.Interval != 0 {
+		s.SyncInterval = time.Duration(a.Interval)
+	}
+	if a.CleanupMode != "" {
+		s.Policy.Mode = cleanup.Mode(a.CleanupMode)
+	}
+	return s
 }

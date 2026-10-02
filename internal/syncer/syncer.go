@@ -38,7 +38,7 @@ type Input struct {
 	Journal    audit.Journal
 	Clock      clock.Clock
 	// ProviderMerged feeds squash-merge detection (branch -> merged PR head SHA); optional.
-	ProviderMerged map[string]string
+	ProviderMerged cleanup.MergedLookup
 }
 
 // Status is the overall outcome.

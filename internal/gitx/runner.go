@@ -149,6 +149,11 @@ func buildEnv(base, overrides []string) []string {
 
 // Run executes `git args...` in dir (empty = current) and returns stdout.
 func (r *Runner) Run(ctx context.Context, dir string, args ...string) (string, error) {
+	return r.RunEnv(ctx, dir, nil, args...)
+}
+
+// RunEnv is Run with extra KEY=VALUE entries for this invocation only (e.g. a credential).
+func (r *Runner) RunEnv(ctx context.Context, dir string, extra []string, args ...string) (string, error) {
 	if _, ok := ctx.Deadline(); !ok {
 		t := r.Timeout
 		if t == 0 {
@@ -161,7 +166,7 @@ func (r *Runner) Run(ctx context.Context, dir string, args ...string) (string, e
 	// #nosec G204 -- the one sanctioned exec site; no shell, args built by gitx
 	cmd := exec.CommandContext(ctx, r.Bin, args...) //nolint:forbidigo,gosec // see #nosec above
 	cmd.Dir = dir
-	cmd.Env = buildEnv(os.Environ(), r.Env)
+	cmd.Env = buildEnv(os.Environ(), append(append([]string{}, r.Env...), extra...))
 	var stdout, stderr limitedBuffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {

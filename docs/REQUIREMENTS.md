@@ -15,7 +15,7 @@ Priority: **M** must (v1.0), **S** should, **C** could (post-1.0). Each requirem
 | FR-A1 | M | Multiple accounts per provider; each account = provider kind + base URL + credential ref. |
 | FR-A2 | M | Credential types: PAT/API token, OAuth device flow (where supported), SSH key via ssh-agent. |
 | FR-A3 | S | GitHub App installation tokens; Azure DevOps Entra ID (OAuth); GitLab OAuth refresh. |
-| FR-A4 | M | Secrets stored only in OS keychain (Secret Service / Keychain / Credential Manager); encrypted-file fallback with user passphrase for headless. |
+| FR-A4 | M | Secrets live in the OS keychain, or are read from a mode-600 `token_file` / an environment variable (agenix, sops-nix, systemd credentials, containers). A passphrase-encrypted file store for headless hosts without any of these is planned for hardening (M7). |
 | FR-A5 | M | Self-hosted instances (GitHub Enterprise Server, GitLab self-managed, Gitea/Forgejo, Bitbucket DC) via base URL + custom CA. |
 | FR-A6 | M | Credential health check: detect expired/revoked/under-scoped token and surface in UI; stop retrying until fixed. |
 
@@ -107,7 +107,7 @@ Priority: **M** must (v1.0), **S** should, **C** could (post-1.0). Each requirem
 | ID | Requirement |
 |---|---|
 | SEC-1 | UI binds `127.0.0.1` (never `0.0.0.0`) on a free port; optional unix socket; one-time login URL → session cookie; Host/Origin validation; CSRF protection; strict CSP; no CORS. |
-| SEC-2 | Tokens never in config, argv, env of child processes, URLs, logs, or crash dumps. Git auth via `GIT_ASKPASS`-style helper or in-memory `http.extraHeader` over stdin/fd. |
+| SEC-2 | Tokens never in config files, argv, URLs, logs or the DB. They are stored in the OS keychain (or read from `token_file`/`token_env`) and reach git only through the environment of that single git child, via the `GIT_ASKPASS` helper, which answers prompts for exactly one host (ADR-0015). |
 | SEC-3 | TLS verification always on; custom CA bundle allowed; no `insecure-skip-verify` option. |
 | SEC-4 | Least-privilege scopes documented per provider; read-only default; warn if token is over-scoped. |
 | SEC-5 | Repo content treated as untrusted: disable hooks (`core.hooksPath=/dev/null`), `protocol.file.allow=never`, `safe.directory` honoured, no fsmonitor/`core.sshCommand` from repo config, no submodule recursion exec. |

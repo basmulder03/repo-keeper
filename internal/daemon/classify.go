@@ -56,7 +56,7 @@ var (
 		"permission denied (publickey", "invalid credentials", "returned error: 401", "returned error: 403",
 		"repository not found", "access denied", "bad credentials",
 	}
-	networkReasons = map[string]bool{"ls-remote": true, "fetch": true}
+	networkReasons = map[string]bool{"ls-remote": true, "fetch": true, "clone": true}
 )
 
 // classify maps a sync result to a scheduling kind and a limiter observation.

@@ -57,6 +57,25 @@ var migrations = []string{
 		code TEXT NOT NULL,
 		message TEXT NOT NULL
 	);`,
+	`ALTER TABLE repos ADD COLUMN source TEXT NOT NULL DEFAULT '';
+	ALTER TABLE repos ADD COLUMN full_name TEXT NOT NULL DEFAULT '';
+	ALTER TABLE repos ADD COLUMN remote_id TEXT NOT NULL DEFAULT '';
+	ALTER TABLE repos ADD COLUMN clone_url TEXT NOT NULL DEFAULT '';
+	ALTER TABLE repos ADD COLUMN missing INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE repos ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;
+	CREATE TABLE accounts (
+		name TEXT PRIMARY KEY,
+		provider TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT '',
+		login TEXT NOT NULL DEFAULT '',
+		warnings TEXT NOT NULL DEFAULT '',
+		expires_ms INTEGER NOT NULL DEFAULT 0,
+		checked_ms INTEGER NOT NULL DEFAULT 0,
+		discovered_ms INTEGER NOT NULL DEFAULT 0,
+		next_discovery_ms INTEGER NOT NULL DEFAULT 0,
+		repo_count INTEGER NOT NULL DEFAULT 0,
+		error TEXT NOT NULL DEFAULT ''
+	);`,
 }
 
 const (
@@ -137,6 +156,12 @@ type Repo struct {
 	LastFF         string
 	Failures       int
 	NeedsAttention bool
+	Source         string // "" = listed in config, otherwise the account that discovered it
+	FullName       string
+	RemoteID       string
+	CloneURL       string
+	Missing        bool // no longer listed by its account; the local clone is left alone
+	Archived       bool
 }
 
 // Spec is the desired configuration of one repo.
@@ -144,6 +169,11 @@ type Spec struct {
 	Path     string
 	Remote   string
 	Interval time.Duration
+	// Fields below are set for repos discovered through an account.
+	FullName string
+	RemoteID string
+	CloneURL string
+	Archived bool
 }
 
 func ms(t time.Time) int64 {
@@ -160,21 +190,21 @@ func fromMS(v int64) time.Time {
 	return time.UnixMilli(v)
 }
 
-// SyncRepos makes the active set equal specs: upserts, schedules new repos at firstDue, deactivates the rest.
-// History of removed repos is kept so re-adding one does not lose it.
+// SyncRepos makes the active config-listed (manual) repos equal specs: upserts, schedules new repos at firstDue,
+// deactivates the rest. History of removed repos is kept so re-adding one does not lose it.
 func (s *Store) SyncRepos(ctx context.Context, specs []Spec, firstDue func(i int) time.Time) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx, "UPDATE repos SET active = 0"); err != nil {
+	if _, err := tx.ExecContext(ctx, "UPDATE repos SET active = 0 WHERE source = ''"); err != nil {
 		return err
 	}
 	for i, sp := range specs {
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO repos(path, remote, interval_s, active, next_sync_ms) VALUES(?, ?, ?, 1, ?)
-			ON CONFLICT(path) DO UPDATE SET remote=excluded.remote, interval_s=excluded.interval_s, active=1`,
+			ON CONFLICT(path) DO UPDATE SET remote=excluded.remote, interval_s=excluded.interval_s, active=1 WHERE repos.source = ''`,
 			sp.Path, sp.Remote, int64(sp.Interval/time.Second), ms(firstDue(i))); err != nil {
 			return err
 		}
@@ -182,16 +212,71 @@ func (s *Store) SyncRepos(ctx context.Context, specs []Spec, firstDue func(i int
 	return tx.Commit()
 }
 
+// ManagedResult reports what SyncManaged changed.
+type ManagedResult struct {
+	Added     int
+	Missing   int      // previously known repos the account no longer lists
+	Conflicts []string // paths already owned by another source; skipped
+}
+
+// SyncManaged makes the repos discovered by account equal specs. Repos that disappeared are marked missing and
+// deactivated (never deleted); a path owned by another source is reported, not taken over.
+func (s *Store) SyncManaged(ctx context.Context, account string, specs []Spec, firstDue func(i int) time.Time) (ManagedResult, error) {
+	var res ManagedResult
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return res, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var before int
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM repos WHERE source = ?", account).Scan(&before); err != nil {
+		return res, err
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE repos SET active = 0, missing = 1 WHERE source = ?", account); err != nil {
+		return res, err
+	}
+	for i, sp := range specs {
+		r, err := tx.ExecContext(ctx, `
+			INSERT INTO repos(path, remote, interval_s, active, next_sync_ms, source, full_name, remote_id, clone_url, archived)
+			VALUES(?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(path) DO UPDATE SET remote=excluded.remote, interval_s=excluded.interval_s, active=1, missing=0,
+				full_name=excluded.full_name, remote_id=excluded.remote_id, clone_url=excluded.clone_url, archived=excluded.archived
+			WHERE repos.source = excluded.source`,
+			sp.Path, sp.Remote, int64(sp.Interval/time.Second), ms(firstDue(i)), account, sp.FullName, sp.RemoteID, sp.CloneURL, b2i(sp.Archived))
+		if err != nil {
+			return res, err
+		}
+		if n, _ := r.RowsAffected(); n == 0 {
+			res.Conflicts = append(res.Conflicts, sp.Path)
+		}
+	}
+	var active int
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM repos WHERE source = ? AND active = 1", account).Scan(&active); err != nil {
+		return res, err
+	}
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM repos WHERE source = ? AND missing = 1", account).Scan(&res.Missing); err != nil {
+		return res, err
+	}
+	res.Added = active - (before - res.Missing)
+	if res.Added < 0 {
+		res.Added = 0
+	}
+	return res, tx.Commit()
+}
+
 const repoCols = `id, path, remote, host, interval_s, active, default_branch, digest, next_sync_ms, last_sync_ms,
-	last_status, last_reason, last_error, last_ff, failures, needs_attention`
+	last_status, last_reason, last_error, last_ff, failures, needs_attention, source, full_name, remote_id, clone_url, missing, archived`
 
 func scanRepo(sc interface{ Scan(...any) error }) (Repo, error) {
 	var r Repo
 	var interval, next, last int64
-	var active, attn int
+	var active, attn, missing, archived int
 	err := sc.Scan(&r.ID, &r.Path, &r.Remote, &r.Host, &interval, &active, &r.DefaultBranch, &r.Digest, &next, &last,
-		&r.LastStatus, &r.LastReason, &r.LastError, &r.LastFF, &r.Failures, &attn)
+		&r.LastStatus, &r.LastReason, &r.LastError, &r.LastFF, &r.Failures, &attn,
+		&r.Source, &r.FullName, &r.RemoteID, &r.CloneURL, &missing, &archived)
 	r.Interval, r.Active, r.NeedsAttention = time.Duration(interval)*time.Second, active == 1, attn == 1
+	r.Missing, r.Archived = missing == 1, archived == 1
 	r.NextSync, r.LastSync = fromMS(next), fromMS(last)
 	return r, err
 }
@@ -356,4 +441,50 @@ func b2i(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// Account is the persisted health of a configured account.
+type Account struct {
+	Name          string
+	Provider      string
+	Status        string // ok | auth-failed | error | ""
+	Login         string
+	Warnings      string
+	Expires       time.Time
+	Checked       time.Time
+	Discovered    time.Time
+	NextDiscovery time.Time
+	RepoCount     int
+	Error         string
+}
+
+// SaveAccount upserts an account's state.
+func (s *Store) SaveAccount(ctx context.Context, a Account) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO accounts(name, provider, status, login, warnings, expires_ms, checked_ms, discovered_ms, next_discovery_ms, repo_count, error)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(name) DO UPDATE SET provider=excluded.provider, status=excluded.status, login=excluded.login, warnings=excluded.warnings,
+			expires_ms=excluded.expires_ms, checked_ms=excluded.checked_ms, discovered_ms=excluded.discovered_ms,
+			next_discovery_ms=excluded.next_discovery_ms, repo_count=excluded.repo_count, error=excluded.error`,
+		a.Name, a.Provider, a.Status, a.Login, a.Warnings, ms(a.Expires), ms(a.Checked), ms(a.Discovered), ms(a.NextDiscovery), a.RepoCount, a.Error)
+	return err
+}
+
+// ListAccounts returns all known accounts ordered by name.
+func (s *Store) ListAccounts(ctx context.Context) ([]Account, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT name, provider, status, login, warnings, expires_ms, checked_ms, discovered_ms, next_discovery_ms, repo_count, error FROM accounts ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []Account
+	for rows.Next() {
+		var a Account
+		var exp, chk, disc, next int64
+		if err := rows.Scan(&a.Name, &a.Provider, &a.Status, &a.Login, &a.Warnings, &exp, &chk, &disc, &next, &a.RepoCount, &a.Error); err != nil {
+			return nil, err
+		}
+		a.Expires, a.Checked, a.Discovered, a.NextDiscovery = fromMS(exp), fromMS(chk), fromMS(disc), fromMS(next)
+		out = append(out, a)
+	}
+	return out, rows.Err()
 }

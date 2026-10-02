@@ -112,3 +112,67 @@ func FuzzParse_NeverPanics(f *testing.F) {
 	f.Add([]byte("\x00\xff[["))
 	f.Fuzz(func(t *testing.T, b []byte) { _, _ = Parse(b) })
 }
+
+func TestParse_Accounts_ValidAndResolved(t *testing.T) {
+	c, err := Parse([]byte(`
+[general]
+root = "/home/u/code"
+[[account]]
+name = "work-gh"
+provider = "github"
+base_url = "https://ghe.example.com/api/v3"
+token_file = "/run/secrets/gh"
+include = ["acme/*"]
+exclude = ["*/archive-*"]
+skip_archived = false
+clone_protocol = "ssh"
+discovery_interval = "12h"
+interval = "1h"
+cleanup = "auto"
+[[account]]
+name = "p"
+provider = "github"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b := c.ResolveAccount(c.Accounts[0]), c.ResolveAccount(c.Accounts[1])
+	if a.SkipArchivedRepos || !a.UseSSH || a.Discovery != 12*time.Hour || a.SyncInterval != time.Hour || a.Policy.Mode != "auto" {
+		t.Fatalf("a=%+v", a)
+	}
+	if !b.SkipArchivedRepos || b.UseSSH || b.Discovery != 6*time.Hour || b.SyncInterval != 30*time.Minute || b.Policy.Mode != "dry-run" {
+		t.Fatalf("b=%+v", b)
+	}
+}
+
+func TestParse_Accounts_Rejections(t *testing.T) {
+	root := "[general]\nroot = \"/r\"\n"
+	tests := map[string]struct{ in, want string }{
+		"no root":         {"[[account]]\nname=\"a\"\nprovider=\"github\"", "general.root is required"},
+		"relative root":   {"[general]\nroot=\"r\"", "general.root must be an absolute"},
+		"bad name":        {root + "[[account]]\nname=\"Bad Name\"\nprovider=\"github\"", "must match"},
+		"duplicate":       {root + "[[account]]\nname=\"a\"\nprovider=\"github\"\n[[account]]\nname=\"a\"\nprovider=\"github\"", "used twice"},
+		"provider":        {root + "[[account]]\nname=\"a\"\nprovider=\"svn\"", "not supported"},
+		"both token srcs": {root + "[[account]]\nname=\"a\"\nprovider=\"github\"\ntoken_env=\"X\"\ntoken_file=\"/f\"", "only one of"},
+		"relative file":   {root + "[[account]]\nname=\"a\"\nprovider=\"github\"\ntoken_file=\"f\"", "absolute"},
+		"http base":       {root + "[[account]]\nname=\"a\"\nprovider=\"github\"\nbase_url=\"http://example.com\"", "https"},
+		"protocol":        {root + "[[account]]\nname=\"a\"\nprovider=\"github\"\nclone_protocol=\"ftp\"", "https or ssh"},
+		"discovery floor": {root + "[[account]]\nname=\"a\"\nprovider=\"github\"\ndiscovery_interval=\"5m\"", "discovery_interval"},
+		"interval floor":  {root + "[[account]]\nname=\"a\"\nprovider=\"github\"\ninterval=\"1m\"", "below"},
+		"cleanup":         {root + "[[account]]\nname=\"a\"\nprovider=\"github\"\ncleanup=\"x\"", "must be off"},
+		"glob":            {root + "[[account]]\nname=\"a\"\nprovider=\"github\"\ninclude=[\"[\"]", "invalid glob"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			if _, err := Parse([]byte(tc.in)); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err=%v want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestParse_LoopbackHTTPBaseURL_Allowed(t *testing.T) {
+	if _, err := Parse([]byte("[general]\nroot=\"/r\"\n[[account]]\nname=\"t\"\nprovider=\"github\"\nbase_url=\"http://127.0.0.1:8080\"")); err != nil {
+		t.Fatal(err)
+	}
+}

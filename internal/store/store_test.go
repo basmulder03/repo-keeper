@@ -61,20 +61,20 @@ func TestSyncRepos_UpsertDeactivateReactivate(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	must(s.SyncRepos(ctx, []Spec{{"/a", "origin", time.Hour}, {"/b", "origin", time.Hour}}, at(t0)))
+	must(s.SyncRepos(ctx, []Spec{{Path: "/a", Remote: "origin", Interval: time.Hour}, {Path: "/b", Remote: "origin", Interval: time.Hour}}, at(t0)))
 	rs, _ := s.ListRepos(ctx)
 	if len(rs) != 2 || rs[0].Path != "/a" || !rs[0].NextSync.Equal(t0) || rs[0].Interval != time.Hour {
 		t.Fatalf("rs=%+v", rs)
 	}
 	must(s.Record(ctx, Run{RepoID: rs[1].ID, Started: t0, Finished: t0, Status: "ok", DefaultBranch: "main", NextSync: t0.Add(time.Hour)}))
 
-	must(s.SyncRepos(ctx, []Spec{{"/a", "up", 2 * time.Hour}}, at(t0)))
+	must(s.SyncRepos(ctx, []Spec{{Path: "/a", Remote: "up", Interval: 2 * time.Hour}}, at(t0)))
 	rs, _ = s.ListRepos(ctx)
 	if len(rs) != 1 || rs[0].Remote != "up" || rs[0].Interval != 2*time.Hour {
 		t.Fatalf("after removal: %+v", rs)
 	}
 
-	must(s.SyncRepos(ctx, []Spec{{"/a", "origin", time.Hour}, {"/b", "origin", time.Hour}}, at(t0)))
+	must(s.SyncRepos(ctx, []Spec{{Path: "/a", Remote: "origin", Interval: time.Hour}, {Path: "/b", Remote: "origin", Interval: time.Hour}}, at(t0)))
 	rs, _ = s.ListRepos(ctx)
 	if len(rs) != 2 || rs[1].DefaultBranch != "main" || rs[1].LastStatus != "ok" {
 		t.Fatalf("history of /b must survive: %+v", rs)
@@ -84,7 +84,7 @@ func TestSyncRepos_UpsertDeactivateReactivate(t *testing.T) {
 func TestDue_OrderingLimitAndInactive(t *testing.T) {
 	s, _ := open(t)
 	ctx := t.Context()
-	_ = s.SyncRepos(ctx, []Spec{{"/a", "o", time.Hour}, {"/b", "o", time.Hour}, {"/c", "o", time.Hour}},
+	_ = s.SyncRepos(ctx, []Spec{{Path: "/a", Remote: "o", Interval: time.Hour}, {Path: "/b", Remote: "o", Interval: time.Hour}, {Path: "/c", Remote: "o", Interval: time.Hour}},
 		func(i int) time.Time { return t0.Add(time.Duration(3-i) * time.Minute) })
 	due, err := s.Due(ctx, t0.Add(2*time.Minute), 10)
 	if err != nil || len(due) != 2 || due[0].Path != "/c" || due[1].Path != "/b" {
@@ -98,7 +98,7 @@ func TestDue_OrderingLimitAndInactive(t *testing.T) {
 func TestRecord_UpdatesRepoAndKeepsOldValuesWhenEmpty(t *testing.T) {
 	s, _ := open(t)
 	ctx := t.Context()
-	_ = s.SyncRepos(ctx, []Spec{{"/a", "o", time.Hour}}, at(t0))
+	_ = s.SyncRepos(ctx, []Spec{{Path: "/a", Remote: "o", Interval: time.Hour}}, at(t0))
 	r, _ := s.ListRepos(ctx)
 	id := r[0].ID
 
@@ -126,7 +126,7 @@ func TestRecord_UpdatesRepoAndKeepsOldValuesWhenEmpty(t *testing.T) {
 func TestRecord_TrimsHistory(t *testing.T) {
 	s, _ := open(t)
 	ctx := t.Context()
-	_ = s.SyncRepos(ctx, []Spec{{"/a", "o", time.Hour}}, at(t0))
+	_ = s.SyncRepos(ctx, []Spec{{Path: "/a", Remote: "o", Interval: time.Hour}}, at(t0))
 	r, _ := s.ListRepos(ctx)
 	for i := 0; i < keepRunsPerRepo+10; i++ {
 		_ = s.Record(ctx, Run{RepoID: r[0].ID, Started: t0, Finished: t0, Status: "ok"})
@@ -139,7 +139,7 @@ func TestRecord_TrimsHistory(t *testing.T) {
 func TestDeferAndSetHost(t *testing.T) {
 	s, _ := open(t)
 	ctx := t.Context()
-	_ = s.SyncRepos(ctx, []Spec{{"/a", "o", time.Hour}}, at(t0))
+	_ = s.SyncRepos(ctx, []Spec{{Path: "/a", Remote: "o", Interval: time.Hour}}, at(t0))
 	r, _ := s.ListRepos(ctx)
 	_ = s.Defer(ctx, r[0].ID, t0.Add(time.Hour))
 	_ = s.SetHost(ctx, r[0].ID, "github.com")
@@ -158,5 +158,80 @@ func TestEvents_NewestFirstAndBounded(t *testing.T) {
 	ev, err := s.RecentEvents(ctx, keepEvents*2)
 	if err != nil || len(ev) > keepEvents+1 || ev[0].Message != fmt.Sprint(keepEvents+24) {
 		t.Fatalf("len=%d first=%+v err=%v", len(ev), ev[0], err)
+	}
+}
+
+func specFor(path, full string) Spec {
+	return Spec{Path: path, Remote: "origin", Interval: time.Hour, FullName: full, RemoteID: full, CloneURL: "https://x/" + full}
+}
+
+func TestSyncManaged_AddMissingAndReappear(t *testing.T) {
+	s, _ := open(t)
+	ctx := t.Context()
+	res, err := s.SyncManaged(ctx, "gh", []Spec{specFor("/r/a", "o/a"), specFor("/r/b", "o/b")}, at(t0))
+	if err != nil || res.Added != 2 || res.Missing != 0 {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+	rs, _ := s.ListRepos(ctx)
+	if len(rs) != 2 || rs[0].Source != "gh" || rs[0].FullName != "o/a" || rs[0].CloneURL == "" {
+		t.Fatalf("rs=%+v", rs)
+	}
+
+	res, _ = s.SyncManaged(ctx, "gh", []Spec{specFor("/r/a", "o/a")}, at(t0))
+	if res.Missing != 1 || res.Added != 0 {
+		t.Fatalf("res=%+v", res)
+	}
+	if rs, _ := s.ListRepos(ctx); len(rs) != 1 {
+		t.Fatalf("missing repo must be inactive: %+v", rs)
+	}
+	var missing bool
+	if r, _ := s.queryRepos(ctx, "SELECT "+repoCols+" FROM repos WHERE path = '/r/b'"); len(r) == 1 {
+		missing = r[0].Missing
+	}
+	if !missing {
+		t.Fatal("b should be flagged missing, not deleted")
+	}
+
+	res, _ = s.SyncManaged(ctx, "gh", []Spec{specFor("/r/a", "o/a"), specFor("/r/b", "o/b")}, at(t0))
+	if res.Missing != 0 {
+		t.Fatalf("res=%+v", res)
+	}
+	if rs, _ := s.ListRepos(ctx); len(rs) != 2 {
+		t.Fatalf("b should be active again: %+v", rs)
+	}
+}
+
+func TestSyncManaged_DoesNotHijackOtherSourcesOrManual(t *testing.T) {
+	s, _ := open(t)
+	ctx := t.Context()
+	_ = s.SyncRepos(ctx, []Spec{{Path: "/r/manual", Remote: "origin", Interval: time.Hour}}, at(t0))
+	_, _ = s.SyncManaged(ctx, "one", []Spec{specFor("/r/shared", "o/shared")}, at(t0))
+
+	res, _ := s.SyncManaged(ctx, "two", []Spec{specFor("/r/shared", "o/shared"), specFor("/r/manual", "o/manual")}, at(t0))
+	if len(res.Conflicts) != 2 {
+		t.Fatalf("res=%+v", res)
+	}
+	rs, _ := s.ListRepos(ctx)
+	for _, r := range rs {
+		if r.Path == "/r/shared" && r.Source != "one" || r.Path == "/r/manual" && r.Source != "" {
+			t.Fatalf("hijacked: %+v", r)
+		}
+	}
+	// manual sync must not touch managed repos either
+	_ = s.SyncRepos(ctx, nil, at(t0))
+	if rs, _ := s.ListRepos(ctx); len(rs) != 1 || rs[0].Path != "/r/shared" {
+		t.Fatalf("manual reconcile must leave managed repos active: %+v", rs)
+	}
+}
+
+func TestAccounts_SaveListUpdate(t *testing.T) {
+	s, _ := open(t)
+	ctx := t.Context()
+	_ = s.SaveAccount(ctx, Account{Name: "b", Provider: "github", Status: "ok", Login: "me", RepoCount: 3, Checked: t0, NextDiscovery: t0.Add(time.Hour)})
+	_ = s.SaveAccount(ctx, Account{Name: "a", Provider: "github", Status: "auth-failed", Error: "bad creds"})
+	_ = s.SaveAccount(ctx, Account{Name: "b", Provider: "github", Status: "ok", Login: "me2", RepoCount: 4})
+	as, err := s.ListAccounts(ctx)
+	if err != nil || len(as) != 2 || as[0].Name != "a" || as[1].Login != "me2" || as[1].RepoCount != 4 || as[0].Error != "bad creds" {
+		t.Fatalf("as=%+v err=%v", as, err)
 	}
 }

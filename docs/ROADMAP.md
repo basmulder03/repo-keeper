@@ -7,7 +7,8 @@ Ordering, not promises (one part-time maintainer). **Linux/NixOS first; GitHub f
 | **M0** Foundations | Repo, Nix devShell, CI (Linux; macOS/Windows build-only), conventions | CI green; lint/security gates; docs approved |
 | **M1** ✅ done: Local engine | `gitx`, default-branch detection, FF, all-branch fetch, cleanup + trash + audit journal | CLI syncs/cleans a local repo safely; property + integration tests; 100 % predicate coverage |
 | **M2** ✅ done: Rate limiting & scheduler | `httpx`, `ratelimit`, `sched`, daemon, single instance | 429/Retry-After honoured in simulation; kill -9 safe |
-| **M3** GitHub + UI (first usable) | GitHub discovery/auth (token, device flow BYO client id), merged-PR lookup, keychain, **web UI incl. debug page**, config editing, audit view | End-to-end sync of a real GitHub account within quota; CSRF/Host tests; axe clean; `repo-keeper ui` + runtime-file discovery |
+| **M3a** ✅ done: GitHub | Provider interface + GitHub (token, device flow, GHES), keychain/`token_file`/`token_env`, discovery with include/exclude, cloning, credentialed git via askpass, provider-assisted squash detection, `accounts` and `discover` CLI | Real account syncs within quota |
+| **M3b** Web UI (first usable release) | Local HTTP API, `repo-keeper ui` + one-time login URL, dashboard, config editing, cleanup review, audit view, debug page | CSRF/Host tests; axe clean |
 | **M3.5** Tray helper (Linux SNI) | `repo-keeper-tray`: status icon + menu | Works on KDE/GNOME-AppIndicator/waybar; daemon unaffected when absent |
 | **M4** Provider extensibility proof | Second provider (GitLab, nested groups) added **without touching core** | Shared contract suite passes; layout supports N-level namespaces |
 | **M5** Packaging (Linux) | Nix flake + Home-Manager module, systemd user unit, `.deb`/`.rpm`, container, GoReleaser, cosign, SBOM | Signed Linux releases; reproducible build check |

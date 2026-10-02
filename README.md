@@ -39,3 +39,19 @@ A lightweight, local-first background agent that keeps every repository you can 
 ## License
 
 [Apache-2.0](LICENSE). Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Quick start (development builds)
+
+```sh
+nix develop            # or install Go ≥ 1.26 and git ≥ 2.34
+make build
+./bin/repo-keeper init                      # writes a starter config
+# GitHub: a fine-grained read-only token is recommended
+./bin/repo-keeper accounts add personal --token-stdin --include 'me/*,my-org/*' < token.txt
+$EDITOR ~/.config/repo-keeper/config.toml   # set [general] root = "/home/you/code"
+./bin/repo-keeper discover                  # preview what would be cloned
+./bin/repo-keeper daemon                    # sync in the background (see packaging/systemd)
+./bin/repo-keeper status
+```
+
+No keychain (headless server, container)? Use `--token-file /run/secrets/gh-token` (mode 600) or `--token-env GH_TOKEN` instead of `--token-stdin`.

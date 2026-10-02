@@ -372,3 +372,42 @@ func TestRun_NoJournal_FailsClosed(t *testing.T) {
 		t.Fatalf("item=%+v", outcome(rep, "feat"))
 	}
 }
+
+func TestRun_ProviderMerged_LazyAndTipMatched(t *testing.T) {
+	r := newRig(t)
+	r.pushedFeature("pr-ok")
+	r.pushedFeature("pr-late")
+	r.pushedFeature("untouched")
+	r.e.Git(r.e.Work, "push", "-q", "origin", "main")
+	// two-commit branch so patch-equivalence cannot prove the squash; only the provider can
+	for _, b := range []string{"pr-ok", "pr-late"} {
+		r.e.Git(r.e.Work, "checkout", "-q", b)
+		r.e.Commit(r.e.Work, b+"2.txt", b, b+" second")
+		r.e.Git(r.e.Work, "push", "-q", "origin", b)
+		r.e.Git(r.e.Work, "checkout", "-q", "main")
+	}
+	okTip, _, _ := r.g.RevParse(t.Context(), "pr-ok")
+	lateTip, _, _ := r.g.RevParse(t.Context(), "pr-late")
+	r.e.Git(r.e.Origin, "branch", "-D", "pr-ok")
+	r.e.Git(r.e.Origin, "branch", "-D", "pr-late")
+	r.e.Git(r.e.Work, "fetch", "-q", "--prune")
+
+	var asked []string
+	rep := r.run(t, cleanup.ModeAuto, func(in *cleanup.Input) {
+		in.ProviderMerged = func(_ context.Context, names []string) (map[string]string, error) {
+			asked = names
+			return map[string]string{"pr-ok": okTip, "pr-late": "deadbeef" + lateTip[8:]}, nil // late: PR head != local tip
+		}
+	})
+	if outcome(rep, "pr-ok").Reason != cleanup.DeleteProviderMerged || outcome(rep, "pr-ok").Outcome != cleanup.Deleted {
+		t.Fatalf("pr-ok=%+v", outcome(rep, "pr-ok"))
+	}
+	if outcome(rep, "pr-late").Outcome == cleanup.Deleted || !r.exists("pr-late") {
+		t.Fatal("branch with commits newer than the merged PR head must survive")
+	}
+	for _, n := range asked {
+		if n == "untouched" {
+			t.Fatal("provider must only be asked about upstream-gone branches")
+		}
+	}
+}

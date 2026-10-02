@@ -22,15 +22,20 @@ var ErrUnsafeConfig = errors.New("gitx: repository config contains unsafe keys")
 
 // Repo is a local clone operated on through a Runner.
 type Repo struct {
-	R   *Runner
-	Dir string
+	R    *Runner
+	Dir  string
+	Cred *Cred // optional; applied to every git call of this Repo
 }
 
 // Repo binds dir to the runner.
 func (r *Runner) Repo(dir string) *Repo { return &Repo{R: r, Dir: dir} }
 
 func (g *Repo) run(ctx context.Context, args ...string) (string, error) {
-	return g.R.Run(ctx, g.Dir, args...)
+	extra, err := g.Cred.env()
+	if err != nil {
+		return "", err
+	}
+	return g.R.RunEnv(ctx, g.Dir, extra, args...)
 }
 
 func (g *Repo) line(ctx context.Context, args ...string) (string, error) {

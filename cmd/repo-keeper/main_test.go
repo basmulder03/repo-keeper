@@ -14,6 +14,7 @@ import (
 	"github.com/basmulder03/repo-keeper/internal/clock"
 	"github.com/basmulder03/repo-keeper/internal/gitx"
 	"github.com/basmulder03/repo-keeper/internal/gitxtest"
+	"github.com/basmulder03/repo-keeper/internal/secrets"
 )
 
 func newApp(e *gitxtest.Env) (*app, *bytes.Buffer, *bytes.Buffer) {
@@ -21,6 +22,8 @@ func newApp(e *gitxtest.Env) (*app, *bytes.Buffer, *bytes.Buffer) {
 	return &app{
 		out: &out, err: &errb,
 		newRunner: func() (*gitx.Runner, error) { return e.R, nil },
+		secrets:   &secrets.Mem{},
+		in:        strings.NewReader(""),
 		clock:     clock.NewFake(time.Now().Add(time.Hour)),
 	}, &out, &errb
 }

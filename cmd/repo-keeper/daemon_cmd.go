@@ -126,9 +126,10 @@ func (a *app) cmdDaemon(ctx context.Context, args []string) int {
 		_, _ = fmt.Fprintln(a.err, err)
 		return 1
 	}
+	red := &obs.Redactor{}
 	d := &daemon.Daemon{
 		ConfigPath: c.configPath, StateDir: c.stateDir, Runner: runner, Clock: a.clock,
-		Log: obs.New(a.err, lvl, *jsonLog, nil),
+		Version: version, Secrets: a.secrets, Redactor: red, Log: obs.New(a.err, lvl, *jsonLog, red),
 	}
 	if err := d.Run(ctx); err != nil {
 		if errors.Is(err, instance.ErrRunning) {

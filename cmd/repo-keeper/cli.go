@@ -18,12 +18,15 @@ import (
 	"github.com/basmulder03/repo-keeper/internal/clock"
 	"github.com/basmulder03/repo-keeper/internal/gitx"
 	"github.com/basmulder03/repo-keeper/internal/paths"
+	"github.com/basmulder03/repo-keeper/internal/secrets"
 	"github.com/basmulder03/repo-keeper/internal/syncer"
 )
 
 // app carries injectable dependencies so commands are testable without touching the real HOME.
 type app struct {
 	out, err  io.Writer
+	in        io.Reader
+	secrets   secrets.Store
 	newRunner func() (*gitx.Runner, error)
 	clock     clock.Clock
 }
