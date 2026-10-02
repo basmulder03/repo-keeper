@@ -5,7 +5,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-.PHONY: build test lint security fmt tidy gen check
+.PHONY: build test lint security fmt tidy gen check snapshot repro
 .DEFAULT_GOAL := build
 
 build: ## static binary in ./bin
@@ -29,5 +29,11 @@ tidy:
 
 gen: ## generated artifacts (config schema/docs arrive in M1+)
 	@echo "nothing to generate yet"
+
+snapshot: ## local release build (tarballs, deb, rpm) into ./dist without signing/publishing
+	SOURCE_DATE_EPOCH=$$(git log -1 --format=%ct) goreleaser release --snapshot --clean --skip=sign,sbom,publish
+
+repro: ## prove the release artifacts are byte-reproducible
+	./scripts/check-reproducible.sh
 
 check: test lint security ## what CI and every PR must pass

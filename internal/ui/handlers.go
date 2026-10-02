@@ -418,9 +418,10 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request, si sessionI
 // ---- config
 
 type configData struct {
-	Text    string
-	Version string
-	Errors  []string
+	Text     string
+	Version  string
+	Errors   []string
+	ReadOnly string
 }
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request, si sessionInfo) {
@@ -429,11 +430,15 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request, si session
 		s.internal(w, r, err)
 		return
 	}
-	s.render(w, r, si, "config", "Configuration", "config", configData{Text: text, Version: ver})
+	s.render(w, r, si, "config", "Configuration", "config", configData{Text: text, Version: ver, ReadOnly: s.Backend.ConfigReadOnly()})
 }
 
 func (s *Server) handleConfigSave(w http.ResponseWriter, r *http.Request, si sessionInfo) {
 	text := strings.ReplaceAll(r.PostFormValue("text"), "\r\n", "\n")
+	if why := s.Backend.ConfigReadOnly(); why != "" {
+		s.fail(w, r, http.StatusForbidden, "The configuration is read-only: "+why)
+		return
+	}
 	if len(text) > maxConfigSize {
 		s.fail(w, r, http.StatusRequestEntityTooLarge, "Configuration is too large.")
 		return

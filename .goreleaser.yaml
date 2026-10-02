@@ -1,0 +1,110 @@
+# SPDX-License-Identifier: Apache-2.0
+# Linux-only for now: Windows and macOS binaries are not shipped until they can be signed (see docs/DISTRIBUTION.md).
+version: 2
+project_name: repo-keeper
+
+before:
+  hooks:
+    - go mod verify
+
+builds:
+  - id: repo-keeper
+    main: ./cmd/repo-keeper
+    binary: repo-keeper
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    hooks:
+      post: "touch -d @{{ .Env.SOURCE_DATE_EPOCH }} {{ .Path }}" # reproducible mtime; set SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+    ldflags: ["-s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }}"]
+  - id: repo-keeper-tray
+    main: ./cmd/repo-keeper-tray
+    binary: repo-keeper-tray
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    hooks:
+      post: "touch -d @{{ .Env.SOURCE_DATE_EPOCH }} {{ .Path }}" # reproducible mtime; set SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+    ldflags: ["-s -w -X main.version={{ .Version }}"]
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - src: LICENSE
+        info: {owner: root, group: root, mtime: "2020-01-01T00:00:00Z"}
+      - src: README.md
+        info: {owner: root, group: root, mtime: "2020-01-01T00:00:00Z"}
+      - src: docs/INSTALL.md
+        info: {owner: root, group: root, mtime: "2020-01-01T00:00:00Z"}
+      - src: packaging/systemd/*.service
+        dst: systemd
+        strip_parent: true
+        info: {owner: root, group: root, mtime: "2020-01-01T00:00:00Z"}
+
+nfpms:
+  - id: packages
+    package_name: repo-keeper
+    ids: [repo-keeper, repo-keeper-tray]
+    vendor: repo-keeper contributors
+    homepage: https://github.com/basmulder03/repo-keeper
+    maintainer: repo-keeper maintainers <noreply@users.noreply.github.com>
+    description: Keeps local clones of your remote repositories in sync, safely.
+    license: Apache-2.0
+    formats: [deb, rpm]
+    dependencies: [git]
+    recommends: [openssh-client]
+    bindir: /usr/bin
+    contents:
+      - src: packaging/linux/repo-keeper.service
+        dst: /usr/lib/systemd/user/repo-keeper.service
+        file_info: {owner: root, group: root, mtime: "2020-01-01T00:00:00Z"}
+      - src: packaging/linux/repo-keeper-tray.service
+        dst: /usr/lib/systemd/user/repo-keeper-tray.service
+        file_info: {owner: root, group: root, mtime: "2020-01-01T00:00:00Z"}
+      - src: LICENSE
+        dst: /usr/share/doc/repo-keeper/LICENSE
+        file_info: {owner: root, group: root, mtime: "2020-01-01T00:00:00Z"}
+      - src: docs/INSTALL.md
+        dst: /usr/share/doc/repo-keeper/INSTALL.md
+        file_info: {owner: root, group: root, mtime: "2020-01-01T00:00:00Z"}
+    overrides:
+      rpm:
+        dependencies: [git-core]
+        recommends: [openssh-clients]
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+sboms:
+  - id: archives
+    artifacts: archive
+    documents: ["${artifact}.spdx.json"]
+    cmd: syft
+    args: ["$artifact", "--output", "spdx-json=$document"]
+
+signs:
+  - id: cosign-checksums
+    cmd: cosign
+    artifacts: checksum
+    output: true
+    args: [sign-blob, --yes, "--output-signature=${signature}", "--output-certificate=${certificate}", "${artifact}"]
+    certificate: "${artifact}.pem"
+    signature: "${artifact}.sig"
+
+changelog:
+  use: git
+  groups:
+    - {title: Features, regexp: '^feat', order: 0}
+    - {title: Fixes, regexp: '^fix', order: 1}
+  filters:
+    exclude: ['^docs', '^chore', '^test']
+
+release:
+  github: {owner: basmulder03, name: repo-keeper}
+  draft: true
+  prerelease: auto

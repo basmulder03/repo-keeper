@@ -13,8 +13,26 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 LockPersonality=yes
+UMask=0077
+PrivateDevices=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectProc=invisible
+ProcSubset=pid
+CapabilityBoundingSet=
+RestrictRealtime=yes
+MemoryDenyWriteExecute=yes
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
 
 [Install]
 WantedBy=graphical-session.target

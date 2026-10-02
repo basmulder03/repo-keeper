@@ -2,7 +2,7 @@
 
 A lightweight, local-first background agent that keeps every repository you can access on GitHub, GitLab, Bitbucket, Azure DevOps and Gitea/Forgejo cloned and up to date, safely.
 
-> **Status:** early development: sync engine, GitHub and GitLab, rate limiting, daemon, web UI and tray work; more providers and packaging are next. First target: Linux/NixOS. See [`docs/`](docs/README.md) and the [roadmap](docs/ROADMAP.md).
+> **Status:** early development: sync engine, GitHub and GitLab, rate limiting, daemon, web UI, tray and Linux packaging (Nix modules, deb, rpm) work; more providers and hardening are next. See [`docs/`](docs/README.md), [installation](docs/INSTALL.md) and the [roadmap](docs/ROADMAP.md).
 
 ## What it does
 
@@ -39,6 +39,8 @@ A lightweight, local-first background agent that keeps every repository you can 
 ## License
 
 [Apache-2.0](LICENSE). Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Installing as a service (NixOS, Home Manager, deb, rpm, tarball): see [docs/INSTALL.md](docs/INSTALL.md).
 
 ## Quick start (development builds)
 

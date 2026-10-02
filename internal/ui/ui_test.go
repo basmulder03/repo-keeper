@@ -38,6 +38,7 @@ type fake struct {
 	saveErr    error
 	restoreEr  error
 	cleanupErr error
+	readOnly   string
 	report     cleanup.Report
 }
 
@@ -133,6 +134,7 @@ func (f *fake) Restore(_ context.Context, _ int64, b string) error {
 	f.rec("restore:" + b)
 	return f.restoreEr
 }
+func (f *fake) ConfigReadOnly() string          { return f.readOnly }
 func (f *fake) Config() (string, string, error) { return "[general]\n# " + xss + "\n", "v1", nil }
 func (f *fake) SaveConfig(_ context.Context, text, ver string) error {
 	f.rec("save:" + ver + ":" + strings.TrimSpace(text))
@@ -665,5 +667,24 @@ func TestMachineAPI_StatusAndActions(t *testing.T) {
 	// foreign origins cannot drive it even with a leaked token (browsers can't set Authorization cross-origin anyway)
 	if w := e.do(http.MethodPost, "/api/pause", nil, auth, hdr("Origin", "http://evil.example")); w.Code != http.StatusForbidden {
 		t.Errorf("cross-origin => %d", w.Code)
+	}
+}
+
+func TestConfig_ReadOnly_ShownAndSaveRefused(t *testing.T) {
+	e := newEnv(t)
+	c, csrf := e.login()
+	e.b.readOnly = "managed by Home Manager"
+	body := e.do(http.MethodGet, "/config", nil, cookie(c)).Body.String()
+	if !strings.Contains(body, "Read-only: managed by Home Manager") || !strings.Contains(body, " readonly") || strings.Contains(body, "Validate and save") {
+		t.Fatalf("page must explain and disable editing:\n%s", body)
+	}
+	w := e.do(http.MethodPost, "/config", url.Values{"csrf": {csrf}, "version": {"v1"}, "text": {"[general]"}}, cookie(c))
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("save must be refused, got %d", w.Code)
+	}
+	for _, call := range e.b.calls {
+		if strings.HasPrefix(call, "save:") {
+			t.Fatal("backend save reached despite read-only config")
+		}
 	}
 }

@@ -37,4 +37,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
-      - run: nix build .#default && nix flake check
+      - run: nix flake check   # builds the package (with tests) and evaluates the Home Manager and NixOS modules
+  release-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - uses: goreleaser/goreleaser-action@v6
+        with: { version: "~> v2", args: check }
+      - uses: goreleaser/goreleaser-action@v6
+        with: { version: "~> v2", install-only: true }
+      - name: Release artifacts are reproducible
+        run: ./scripts/check-reproducible.sh

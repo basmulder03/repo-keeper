@@ -285,3 +285,34 @@ func TestUI_MachineAPI_StatusPauseSyncAll(t *testing.T) {
 	}
 	_ = b
 }
+
+func TestUI_ConfigSymlink_IsReadOnly(t *testing.T) {
+	e := gitxtest.New(t)
+	dir := t.TempDir()
+	real := filepath.Join(dir, "managed.toml")
+	writeCfg(t, real, "[general]\ninterval = \"30m\"\n")
+	link := filepath.Join(dir, "config.toml")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	d := &Daemon{ConfigPath: link, StateDir: filepath.Join(dir, "state"), Runner: e.R}
+	d.Clock = clock.Real{}
+	b := uiBackend{d}
+	if why := b.ConfigReadOnly(); !strings.Contains(why, "managed.toml") {
+		t.Fatalf("why=%q", why)
+	}
+	if err := b.SaveConfig(context.Background(), "[general]\ninterval = \"1h\"\n", ""); err == nil || !strings.Contains(err.Error(), "read-only") {
+		t.Fatalf("err=%v", err)
+	}
+	if fi, _ := os.Lstat(link); fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("the symlink was replaced")
+	}
+	if got, _ := os.ReadFile(real); !strings.Contains(string(got), "30m") {
+		t.Fatal("managed file was modified")
+	}
+	plain := filepath.Join(dir, "plain.toml")
+	writeCfg(t, plain, "")
+	if (uiBackend{&Daemon{ConfigPath: plain}}).ConfigReadOnly() != "" {
+		t.Fatal("a regular file must be editable")
+	}
+}

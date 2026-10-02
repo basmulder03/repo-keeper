@@ -3,16 +3,17 @@
 ## Targets
 linux/macOS/windows × amd64/arm64, static binaries, built by GoReleaser in GitHub Actions with pinned actions.
 
-## Install channels (in priority order)
-| Channel | Platforms | Notes |
-|---|---|---|
-| Homebrew tap | macOS, Linux | Formula + `brew services` |
-| winget + Scoop | Windows | Manifest PRs automated |
-| `.deb` / `.rpm` | Linux | systemd **user** unit shipped, not enabled by default |
-| Nix flake / nixpkgs (**first target**) | NixOS, any | Home-Manager module (`services.repo-keeper`) |
-| AUR | Arch | `repo-keeper-bin` |
-| Tarball/zip | all | Checksums + cosign signature |
-| Container (optional) | Linux | For headless servers; non-root, read-only rootfs |
+## Install channels
+
+Shipped now (Linux only; Windows and macOS binaries are deliberately not published until they can be code-signed, because unsigned executables are exactly what SmartScreen and antivirus engines distrust):
+
+| Channel | Notes |
+|---|---|
+| Nix flake (`packages`, `apps`, `homeManagerModules.default`, `nixosModules.default`) | First-class; both modules are evaluated and asserted by `nix flake check` (the generated config must pass `repo-keeper config validate`) |
+| `.deb` / `.rpm` (amd64, arm64) | Built by GoReleaser/nfpm; user units under `/usr/lib/systemd/user/`, not enabled automatically |
+| Tarball (amd64, arm64) | Binaries, LICENSE, install guide, example units |
+
+Planned: Homebrew tap, AUR, winget/Scoop (after signing), container image (headless servers). See [INSTALL](INSTALL.md).
 
 `repo-keeper install-service` / `uninstall-service` register per-user autostart using **official** mechanisms only: systemd `--user`, launchd LaunchAgent, Windows Task Scheduler (per-user, "at logon"). No registry Run-key hacks beyond that, no admin, no drivers, no services running as SYSTEM.
 
@@ -42,3 +43,9 @@ SBOM (SPDX/CycloneDX via syft), SLSA provenance (`slsa-github-generator`), cosig
 
 ## Versioning & releases
 SemVer, Conventional Commits, changelog auto-generated, release PR gate with security checklist.
+
+## What M5 actually verifies
+
+- **Reproducibility:** `make repro` (and the `release-config` CI job) builds the snapshot release twice, with a different wall clock, and fails unless every binary, tarball, `.deb` and `.rpm` is byte-identical. `SOURCE_DATE_EPOCH` (the last commit time) drives all timestamps. One known wrinkle: tarball entries for the two binaries carry the builder's user/group names, so tarballs are identical only on the same account; the binaries inside and the `.deb`/`.rpm` files are identical everywhere.
+- **Release pipeline** (`.github/workflows/release.yml`, on `v*` tags): GoReleaser builds, `syft` writes an SPDX SBOM per archive, `cosign` keyless-signs `checksums.txt`, GitHub build-provenance attestations cover archives, packages and checksums, and the GitHub release is created as a **draft** for a human to review and publish. This workflow has not run yet (it needs a pushed tag); its pieces were exercised locally except signing, SBOM and attestation.
+- **Service sandbox:** the unit settings are shared by the Nix modules and the package units. `systemd-analyze security` rates the generated unit **1.6 (OK)**; the daemon and the tray were run for real under the full set of restrictions (`MemoryDenyWriteExecute`, `SystemCallFilter=@system-service ~@privileged`, empty capability set, `ProtectSystem=strict`, ...) and synced, served the UI and registered the tray icon.

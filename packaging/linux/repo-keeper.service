@@ -1,25 +1,29 @@
-# User unit: install to ~/.config/systemd/user/ then `systemctl --user enable --now repo-keeper`
+# repo-keeper user service. Enable per user: systemctl --user enable --now repo-keeper
+#
+# The sandbox lets the daemon write only its own state/runtime directories and the clone folders below.
+# Clone root elsewhere? Add a drop-in:  systemctl --user edit repo-keeper
+#   [Service]
+#   ReadWritePaths=/path/to/your/clones
 [Unit]
 Description=repo-keeper: keep local clones in sync
 After=network-online.target
 
 [Service]
-ExecStart=%h/.local/bin/repo-keeper daemon
+ExecStart=/usr/bin/repo-keeper daemon
 Restart=on-failure
 RestartSec=30
-# Hardening: it only needs the user's repos and its own state
 StateDirectory=repo-keeper
 RuntimeDirectory=repo-keeper
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
+ReadWritePaths=-%h/code -%h/src -%h/projects -%h/git
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 RestrictNamespaces=yes
 SystemCallArchitectures=native
-ReadWritePaths=-%h/code -%h/src -%h/projects -%h/git
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 LockPersonality=yes
 UMask=0077

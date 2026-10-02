@@ -299,6 +299,15 @@ func versionOf(text string) string {
 	return hex.EncodeToString(sum[:8])
 }
 
+// ConfigReadOnly reports a declaratively managed config (a symlink, e.g. into /nix/store): replacing it would fight the tool that owns it.
+func (b uiBackend) ConfigReadOnly() string {
+	if fi, err := os.Lstat(b.d.ConfigPath); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		target, _ := os.Readlink(b.d.ConfigPath)
+		return "this file is a symlink to " + target + " and is managed outside repo-keeper (for example by Home Manager); change it there"
+	}
+	return ""
+}
+
 func (b uiBackend) Config() (string, string, error) {
 	data, err := os.ReadFile(b.d.ConfigPath)
 	if err != nil {
@@ -309,6 +318,9 @@ func (b uiBackend) Config() (string, string, error) {
 
 // SaveConfig validates, keeps the previous file in the history, replaces atomically and asks the daemon to reload.
 func (b uiBackend) SaveConfig(_ context.Context, text, version string) error {
+	if why := b.ConfigReadOnly(); why != "" {
+		return errors.New("configuration is read-only: " + why)
+	}
 	cur, err := os.ReadFile(b.d.ConfigPath)
 	if err != nil {
 		return err

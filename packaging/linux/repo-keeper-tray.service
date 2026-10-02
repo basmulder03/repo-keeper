@@ -1,15 +1,13 @@
-# User unit: install to ~/.config/systemd/user/ then `systemctl --user enable --now repo-keeper`
+# Optional tray icon: systemctl --user enable --now repo-keeper-tray
 [Unit]
-Description=repo-keeper: keep local clones in sync
-After=network-online.target
+Description=repo-keeper tray icon
+PartOf=graphical-session.target
+After=graphical-session.target
 
 [Service]
-ExecStart=%h/.local/bin/repo-keeper daemon
+ExecStart=/usr/bin/repo-keeper-tray
 Restart=on-failure
-RestartSec=30
-# Hardening: it only needs the user's repos and its own state
-StateDirectory=repo-keeper
-RuntimeDirectory=repo-keeper
+RestartSec=10
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
@@ -19,7 +17,6 @@ ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 RestrictNamespaces=yes
 SystemCallArchitectures=native
-ReadWritePaths=-%h/code -%h/src -%h/projects -%h/git
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 LockPersonality=yes
 UMask=0077
@@ -37,4 +34,4 @@ SystemCallFilter=@system-service
 SystemCallFilter=~@privileged
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target
