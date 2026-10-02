@@ -4,7 +4,9 @@
 The latest minor release receives security fixes. Pre-1.0: only `main` and the latest tag.
 
 ## Reporting a vulnerability
-**Do not open a public issue.** Use GitHub's *Private vulnerability reporting* (Security tab → "Report a vulnerability") on this repository, or email the maintainer listed in the repo profile. Please include version, OS, reproduction steps and impact.
+**Do not open a public issue.** Report privately through GitHub: **<https://github.com/basmulder03/repo-keeper/security/advisories/new>** (Security tab → "Report a vulnerability"). Only the maintainers can see the report. Please include the version (`repo-keeper version`), OS, reproduction steps and impact.
+
+Policy and past advisories: <https://github.com/basmulder03/repo-keeper/security>. For how releases are signed and verified see [docs/INSTALL.md](docs/INSTALL.md#verifying-a-release); the design and the self-review are in [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) and [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
 
 - Acknowledgement within **3 business days**, triage within **7 days**.
 - Fix target: critical ≤ 14 days, high ≤ 30 days; coordinated disclosure, credit given unless you prefer otherwise.
