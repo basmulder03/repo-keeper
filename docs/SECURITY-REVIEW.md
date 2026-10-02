@@ -37,7 +37,7 @@ A structured pass over the whole code base against [THREAT-MODEL](THREAT-MODEL.m
 | T7 path traversal / symlinks | Mitigated: strict segment validation (fuzzed), `CheckNoSymlinks`, `LocalPath` never escapes root (fuzzed). |
 | T8 data loss | Mitigated: fail-closed predicate verified exhaustively, write-ahead audit, race-safe deletes, trash refs, UI cannot name branches to delete. |
 | T9 provider abuse | Mitigated: per-host limiter, caps on server-supplied waits, floors on intervals. |
-| T10/T11 supply chain | Partly mitigated: pinned modules, `govulncheck`, reproducible releases checked in CI, keyless signatures and provenance (pipeline not yet exercised on a real tag). **Open:** GitHub Actions are pinned by tag, not SHA. |
+| T10/T11 supply chain | Partly mitigated: pinned modules, `govulncheck`, reproducible releases checked in CI, keyless signatures and provenance (pipeline not yet exercised on a real tag). GitHub Actions are pinned by commit SHA (Dependabot keeps them current). |
 | T12 local tampering by same-privilege malware | Accepted (out of scope), config strictly validated. |
 | T14 resource exhaustion | Mitigated: output, body, config and file size caps, bounded caches and worker pool; measured in [PERFORMANCE](PERFORMANCE.md). |
 
@@ -52,6 +52,6 @@ A structured pass over the whole code base against [THREAT-MODEL](THREAT-MODEL.m
 
 ## Open items
 
-- Pin GitHub Actions by commit SHA (needs network access to resolve; add Dependabot grouping).
+- ~~Pin GitHub Actions by commit SHA~~ done: every action is pinned to a commit with its version in a comment; Dependabot proposes updates.
 - Run the first signed release and verify the documented `cosign` and `gh attestation` commands end to end.
 - Schedule the fuzzers in CI (`.github/workflows/fuzz.yml`, added in this milestone) and triage what they find.
