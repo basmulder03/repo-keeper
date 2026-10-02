@@ -1,0 +1,41 @@
+# repo-keeper
+
+A lightweight, local-first background agent that keeps every repository you can access on GitHub, GitLab, Bitbucket, Azure DevOps and Gitea/Forgejo cloned and up to date, safely.
+
+> **Status:** planning, no code yet. First target: Linux/NixOS + GitHub. Start with [`docs/`](docs/README.md).
+
+## What it does
+
+- **Discovers** all remotes you can access per configured account (via official APIs).
+- **Syncs** them on a schedule: fetch, prune, fast-forward the default branch (`main`/`master`/anything, auto-detected).
+- **Cleans up** local branches that are already merged (including squash/rebase merges), with safety rails and undo.
+- **Respects** provider rate limits and terms of service (back-off, conditional requests, polite minimum intervals).
+- **Shows state** in a small local web UI (and CLI): last sync, errors, rate-limit budget, pending cleanups, configuration.
+
+## Principles
+
+1. **Never lose work.** Fast-forward only, never touch dirty trees, never force, every deletion recoverable.
+2. **Least privilege.** Read-only tokens by default; secrets live in the OS keychain only.
+3. **Lightweight.** One static binary, no runtime, idle ≈ 0% CPU, <50 MB RSS.
+4. **Polite.** Official APIs only, identifiable User-Agent, honors `Retry-After` and rate-limit headers.
+5. **Boring to install.** Signed, notarized, reproducible releases; user-level autostart, no admin rights.
+
+## Documentation
+
+| Doc | Purpose |
+|---|---|
+| [Requirements](docs/REQUIREMENTS.md) | What it must do (FR/NFR/SEC, prioritised) |
+| [Architecture](docs/ARCHITECTURE.md) | Components, data model, sync algorithm |
+| [Providers & ToS](docs/PROVIDERS.md) | Per-platform auth, limits, compliance |
+| [Security](SECURITY.md) · [Threat model](docs/THREAT-MODEL.md) | Policy and analysis |
+| [Distribution & AV](docs/DISTRIBUTION.md) | Packaging, signing, avoiding false positives |
+| [Testing](docs/TESTING.md) | Strategy and quality gates |
+| [Implementation plan](docs/IMPLEMENTATION-PLAN.md) | Repo layout, work breakdown |
+| [Roadmap](docs/ROADMAP.md) | Milestones |
+| [Decisions (ADRs)](docs/adr/) | Why we chose what we chose |
+| [Decisions & open items](docs/OPEN-QUESTIONS.md) | Resolved choices, what remains |
+| [AGENTS.md](AGENTS.md) | Rules for AI coding agents |
+
+## License
+
+[Apache-2.0](LICENSE). Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).

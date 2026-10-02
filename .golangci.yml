@@ -1,0 +1,44 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - forbidigo
+    - gosec
+    - misspell
+    - noctx
+    - revive
+    - sloglint
+    - unconvert
+  settings:
+    forbidigo:
+      forbid:
+        # Outbound HTTP must go through internal/httpx (rate limiting, UA, TLS policy).
+        - pattern: ^http\.(Get|Post|PostForm|Head|DefaultClient)$
+          msg: use internal/httpx
+        # Git must go through internal/gitx (hooks off, scrubbed env).
+        - pattern: ^exec\.Command(Context)?$
+          msg: use internal/gitx
+        - pattern: ^(fmt\.Print(f|ln)?|log\.(Print|Fatal|Panic)\w*)$
+          msg: use slog
+    revive:
+      rules:
+        - name: exported
+    sloglint:
+      no-mixed-args: true
+      kv-only: true
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [forbidigo, gosec]
+      - path: cmd/
+        linters: [forbidigo] # CLI output may print to stdout/stderr
+
+formatters:
+  enable:
+    - gofmt

@@ -1,0 +1,15 @@
+name: Bug report
+description: Something is wrong
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes: { label: Version (`repo-keeper version`), }
+    validations: { required: true }
+  - type: input
+    id: env
+    attributes: { label: OS / git version / provider }
+  - type: textarea
+    id: what
+    attributes: { label: What happened, description: "Expected vs actual. Never paste tokens; run `repo-keeper doctor` output only after checking it." }
+    validations: { required: true }
