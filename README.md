@@ -2,7 +2,7 @@
 
 A lightweight, local-first background agent that keeps every repository you can access on GitHub, GitLab, Bitbucket, Azure DevOps and Gitea/Forgejo cloned and up to date, safely.
 
-> **Status:** planning, no code yet. First target: Linux/NixOS + GitHub. Start with [`docs/`](docs/README.md).
+> **Status:** early development (M2 done: local engine, rate limiting, scheduler, daemon). First target: Linux/NixOS + GitHub. See [`docs/`](docs/README.md) and the [roadmap](docs/ROADMAP.md).
 
 ## What it does
 

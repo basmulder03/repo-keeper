@@ -38,3 +38,12 @@ func JournalPath() (string, error) {
 	}
 	return filepath.Join(d, "audit.jsonl"), nil
 }
+
+// ConfigPath is the default configuration file.
+func ConfigPath() (string, error) {
+	d, err := os.UserConfigDir()
+	if err != nil {
+		return "", errors.New("paths: cannot determine config directory")
+	}
+	return filepath.Join(d, "repo-keeper", "config.toml"), nil
+}

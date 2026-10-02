@@ -6,7 +6,6 @@ package syncer
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/basmulder03/repo-keeper/internal/audit"
 	"github.com/basmulder03/repo-keeper/internal/cleanup"
@@ -173,7 +172,7 @@ func Sync(ctx context.Context, in Input) Result {
 }
 
 func fail(reason string, err error) Result {
-	return Result{Status: Failed, Reason: reason, Err: fmt.Errorf("%s: %w", reason, err)}
+	return Result{Status: Failed, Reason: reason, Err: err}
 }
 
 // probeDefault is the last resort when neither the remote nor origin/HEAD names a default.

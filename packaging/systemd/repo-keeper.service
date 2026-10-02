@@ -1,0 +1,20 @@
+# User unit: install to ~/.config/systemd/user/ then `systemctl --user enable --now repo-keeper`
+[Unit]
+Description=repo-keeper: keep local clones in sync
+After=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/repo-keeper daemon
+Restart=on-failure
+RestartSec=30
+# Hardening: it only needs the user's repos and its own state
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+
+[Install]
+WantedBy=default.target

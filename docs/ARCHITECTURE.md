@@ -4,7 +4,7 @@
 
 | Concern | Choice | Why |
 |---|---|---|
-| Language | Go ≥ 1.24 | Static binary, tiny footprint, great stdlib (net/http, slog), easy cross-compile (ADR-0001) |
+| Language | Go ≥ 1.26 | Static binary, tiny footprint, great stdlib (net/http, slog), easy cross-compile (ADR-0001) |
 | Git engine | System `git` CLI (≥ 2.34) via hardened wrapper | Full fidelity, LFS/partial clone/credentials; go-git lacks features (ADR-0002) |
 | State | SQLite via pure-Go driver (`modernc.org/sqlite`), WAL | Queryable, crash-safe, no CGO (ADR-0003) |
 | Config | TOML + JSON Schema | Human-editable, comments (ADR-0004) |
@@ -34,19 +34,21 @@
 ### Packages (`internal/`)
 | Package | Responsibility |
 |---|---|
-| `config` | Load/validate/hot-reload TOML, schema, defaults, atomic save + history |
+| `config` | Strict TOML load/validate (unknown keys rejected, 5 min interval floor, quiet hours), per-repo resolution; polled hot-reload lives in `daemon` |
 | `secrets` | Keyring abstraction, redaction types (`secrets.Token` never prints) |
 | `provider` | `Provider` interface + registry; one subpackage per platform |
-| `httpx` | HTTP client: UA, timeouts, retries, ETag cache, rate-limit header parsing |
-| `ratelimit` | Per-host token bucket, cooldowns, circuit breaker, budget tracking |
+| `httpx` | Only outbound HTTP path: required UA, https-only (loopback exempt for tests), TLS ≥1.2 never unverified, redirect downgrade refused, retries for GET/HEAD, in-memory ETag cache |
+| `ratelimit` | Per-host token bucket + concurrency cap, `Retry-After`/`X-RateLimit-*`/`RateLimit-*` parsing, cooldowns, jittered exponential backoff, circuit breaker, quota tracking (`WaitError` lets callers defer instead of block) |
 | `gitx` | Run git safely: env sanitising, hooks off, askpass, timeouts, output parsing |
 | `syncer` | Per-repo flow: lock → safety checks → ls-remote → fetch → fast-forward → cleanup (named `syncer` to avoid clashing with stdlib `sync`) |
-| `audit` | Append-only journal (JSONL, fsynced) of deletions/restores/blocks; moves into SQLite `store` in M2 |
+| `audit` | Append-only journal (JSONL, fsynced) of deletions/restores/blocks; deliberately stays a flat file (ADR-0014) |
 | `paths` | Per-user state locations |
 | `gitxtest` | Test fixtures: isolated bare origin + clones |
 | `cleanup` | Pure safety predicate + executor + trash/restore |
-| `sched` | Cron-like scheduler, jitter, quiet hours, wake handling |
-| `store` | Migrations, repositories (accounts, repos, runs, events, trash) |
+| `sched` | Tick loop, bounded worker pool, pure `Next()` retry/backoff policy, quiet hours, manual trigger; run-once-after-sleep falls out of rescheduling from `now` |
+| `store` | SQLite (WAL, forward-only migrations, schema-version guard): repos, runs (50/repo), events (ring of 2000) |
+| `instance` | Single-instance OS file lock (flock / exclusive-share handle), released automatically on crash |
+| `daemon` | Wiring: lock → store → config → limiter → scheduler; per-repo job (limiter permit → `syncer` → classify → record); config poll/reload |
 | `ui` | HTTP handlers, templates, static assets, session/CSRF |
 | `tray` (cmd) | Optional tray helper; client of the local API only |
 | `svc` | OS autostart integration (systemd/launchd/Task Scheduler) |
@@ -75,13 +77,12 @@ Capabilities are declared (`Caps()`), so features degrade gracefully (e.g. gener
 
 ## 4. Data model (SQLite)
 
-- `accounts(id, provider, base_url, display_name, cred_ref, status, last_check_at)`
-- `repos(id, account_id, remote_id, full_name, clone_url, local_path, default_branch, archived, missing, rules_hash, next_sync_at, last_status, last_sync_at)`
-- `runs(id, repo_id, started_at, finished_at, outcome, detail_json)`
+- (M3) `accounts(id, provider, base_url, display_name, cred_ref, status, last_check_at)`
+- `repos(id, path, remote, host, interval_s, active, default_branch, digest, next_sync_ms, last_sync_ms, last_status/reason/error/ff, failures, needs_attention)` (provider columns arrive in M3)
+- `runs(id, repo_id, started_ms, finished_ms, status, reason, ff, fetched, error, detail)`
 - `events(id, ts, level, repo_id, code, message)` (ring-capped)
-- `trash(id, repo_id, branch, sha, deleted_at, reason, expires_at)` and `audit(id, ts, repo_id, branch, sha, action, mode, reason)` (append-only journal of deleted/skipped branches)
-- `ratelimits(host, remaining, reset_at, cooldown_until)`
-- `meta(schema_version, ...)`
+- Trash lives in git itself (`refs/repo-keeper/trash/<unix>/<branch>`); the audit journal is `audit.jsonl`, see ADR-0014
+- Schema version via `PRAGMA user_version`
 
 No secrets in the DB. Migrations are forward-only, embedded, tested.
 
@@ -122,8 +123,8 @@ record run, schedule next (interval ± jitter), release lock
 ## 6. Scheduling & rate limiting
 
 - Scheduler ticks every 30 s, enqueues due repos (`next_sync_at ≤ now`), ordered by staleness; jitter ±20 %.
-- Worker pool: `min(4, GOMAXPROCS)`; per-host semaphore (default 2).
-- Every outbound call (API **and** git network op) passes `ratelimit.Wait(host)`.
+- Worker pool: `general.concurrency` (default 4); per-host semaphore `general.per_host` (default 2). A job that must wait more than 30 s on a host is deferred (not blocked) and rescheduled at the cooldown end.
+- Every outbound call (API through `httpx`, git network ops through the daemon job) holds a `ratelimit` permit for its host. Git failures are classified (rate-limited / auth / network) from stderr and fed back.
 - Response handling: parse `Retry-After`, `X-RateLimit-Remaining/Reset`, `RateLimit-*` (IETF draft), GitHub secondary limits (403/429 + message) → set host cooldown; exponential backoff (base 30 s, cap 1 h, full jitter); circuit opens after 5 consecutive failures, half-open probe.
 - Discovery uses ETags; unchanged = 304 (does not count against quota on GitHub).
 - Clock: monotonic time for cooldowns; wall-clock jumps (sleep/resume) handled once.

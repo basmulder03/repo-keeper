@@ -371,3 +371,8 @@ func (g *Repo) TrashList(ctx context.Context) ([]TrashRef, error) {
 func (g *Repo) TrashDrop(ctx context.Context, t TrashRef) error {
 	return g.DeleteRef(ctx, t.Ref, t.SHA)
 }
+
+// RemoteURL returns the fetch URL configured for remote.
+func (g *Repo) RemoteURL(ctx context.Context, remote string) (string, error) {
+	return g.line(ctx, "remote", "get-url", remote)
+}

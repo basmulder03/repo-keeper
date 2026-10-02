@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -130,5 +131,67 @@ func TestCLI_SyncFailure_ExitsNonZero(t *testing.T) {
 	e.Git(e.Work, "remote", "set-url", "origin", filepath.Join(e.Root, "missing.git"))
 	if code := a.run(context.Background(), []string{"sync", e.Work}); code != 1 || !strings.Contains(out.String(), "failed") {
 		t.Fatalf("code=%d out=%s", code, out)
+	}
+}
+
+func TestCLI_Init_Validate_Status(t *testing.T) {
+	e := gitxtest.New(t)
+	a, out, errb := newApp(e)
+	ctx := context.Background()
+	cfg := filepath.Join(e.Root, "cfg", "config.toml")
+	state := filepath.Join(e.Root, "state")
+
+	if code := a.run(ctx, []string{"status", "--state-dir", state}); code != 1 || !strings.Contains(errb.String(), "no state yet") {
+		t.Fatalf("status before daemon: code=%d err=%s", code, errb)
+	}
+	if code := a.run(ctx, []string{"init", "--config", cfg}); code != 0 {
+		t.Fatalf("init code=%d err=%s", code, errb)
+	}
+	errb.Reset()
+	if code := a.run(ctx, []string{"init", "--config", cfg}); code != 1 || !strings.Contains(errb.String(), "not overwriting") {
+		t.Fatalf("second init must refuse: code=%d err=%s", code, errb)
+	}
+	out.Reset()
+	if code := a.run(ctx, []string{"config", "validate", "--config", cfg}); code != 0 || !strings.Contains(out.String(), "valid") {
+		t.Fatalf("validate code=%d out=%s", code, out)
+	}
+	_ = os.WriteFile(cfg, []byte("[general]\ninterval = \"1m\""), 0o600)
+	errb.Reset()
+	if code := a.run(ctx, []string{"config", "validate", "--config", cfg}); code != 1 || !strings.Contains(errb.String(), "minimum") {
+		t.Fatalf("invalid validate code=%d err=%s", code, errb)
+	}
+	if code := a.run(ctx, []string{"config"}); code != 2 {
+		t.Fatalf("config without subcommand code=%d", code)
+	}
+}
+
+func TestCLI_Daemon_RunsAndStatusShowsRepo(t *testing.T) {
+	e := gitxtest.New(t)
+	a, out, errb := newApp(e)
+	cfg := filepath.Join(e.Root, "config.toml")
+	state := filepath.Join(e.Root, "state")
+	_ = os.WriteFile(cfg, []byte("[cleanup]\nmode = \"off\"\n[[repo]]\npath = \""+e.Work+"\"\n"), 0o600)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan int, 1)
+	go func() {
+		done <- a.run(ctx, []string{"daemon", "--config", cfg, "--state-dir", state, "--log-level", "error"})
+	}()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		out.Reset()
+		if a2, o2, _ := newApp(e); a2.run(context.Background(), []string{"status", "--state-dir", state}) == 0 && strings.Contains(o2.String(), "ok") {
+			out.WriteString(o2.String())
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	cancel()
+	if code := <-done; code != 0 {
+		t.Fatalf("daemon exit=%d err=%s", code, errb)
+	}
+	if !strings.Contains(out.String(), e.Work) || !strings.Contains(out.String(), "main") {
+		t.Fatalf("status output: %q", out.String())
 	}
 }

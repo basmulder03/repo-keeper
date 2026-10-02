@@ -4,7 +4,7 @@ Format: Context → Decision → Consequences. Supersede by adding a new ADR, ne
 
 ## ADR-0001 Language: Go
 **Context:** need tiny, static, cross-platform, background-friendly binary, easy concurrency and HTTP.
-**Decision:** Go ≥ 1.24, `CGO_ENABLED=0`.
+**Decision:** Go ≥ 1.26, `CGO_ENABLED=0`.
 **Consequences:** + single binary, fast builds, mature tooling. − Go binaries get more AV scrutiny (mitigated by signing/no packing); GC overhead small.
 
 ## ADR-0002 Git engine: system git CLI
@@ -55,3 +55,6 @@ Format: Context → Decision → Consequences. Supersede by adding a new ADR, ne
 **Context:** the UI should be one command away and also reachable from a tray icon, without making the daemon heavy or GUI-dependent.
 **Decision:** daemon owns the web server (default port 7878, falls back to an OS-assigned free port) and publishes its address in a `0600` runtime file; `repo-keeper ui` opens a one-time login URL; a separate optional `repo-keeper-tray` helper talks to the same local API. Minimum git version **2.34** (Ubuntu 22.04 floor; has `GIT_CONFIG_COUNT`, `safe.directory`, mature worktree/partial-clone support), `doctor` recommends ≥ 2.39.
 **Consequences:** + headless-friendly, tray crash-isolated, no token pasting; − two processes to package, tray depends on desktop support (SNI on Linux).
+
+## ADR-0014 Dependencies and audit storage in M2
+**Decision:** two third-party modules: `modernc.org/sqlite` (pure Go, BSD-3, needed for ADR-0003) and `github.com/pelletier/go-toml/v2` (MIT, strict decoding with unknown-key rejection). Go floor raised to 1.26 by the SQLite module. The audit journal stays an append-only fsynced JSONL file instead of moving into SQLite: it is trivially greppable, survives database corruption/migration, and a single `write+fsync` before each deletion is the strongest simple guarantee. **Consequences:** + auditability independent of the DB; − two storage formats (UI reads the journal through `audit.File`). `vendorHash` in `flake.nix` must be refreshed when `go.mod` changes.

@@ -14,7 +14,7 @@
           pname = "repo-keeper";
           version = self.shortRev or self.dirtyShortRev or "dev";
           src = ./.;
-          vendorHash = null; # no third-party deps yet; set when go.sum appears
+          vendorHash = "sha256-8BwwKmH+cTtQAOcZi+apYjDX1w6m6EgxYDNhZCU+nk0="; # refresh with lib.fakeHash after changing go.mod
           env.CGO_ENABLED = 0;
           subPackages = [ "cmd/repo-keeper" ];
           ldflags = [ "-s" "-w" "-X main.version=${self.shortRev or "dev"}" ];

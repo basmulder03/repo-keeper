@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/basmulder03/repo-keeper/internal/clock"
 	"github.com/basmulder03/repo-keeper/internal/gitx"
@@ -21,7 +22,7 @@ var (
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	a := &app{out: os.Stdout, err: os.Stderr, newRunner: gitx.New, clock: clock.Real{}}
 	os.Exit(a.run(ctx, os.Args[1:]))
@@ -43,6 +44,14 @@ func (a *app) run(ctx context.Context, args []string) int {
 		return a.cmdRestore(ctx, rest)
 	case "audit":
 		return a.cmdAudit(ctx, rest)
+	case "daemon":
+		return a.cmdDaemon(ctx, rest)
+	case "status":
+		return a.cmdStatus(ctx, rest)
+	case "init":
+		return a.cmdInit(ctx, rest)
+	case "config":
+		return a.cmdConfig(ctx, rest)
 	case "doctor":
 		return a.cmdDoctor(ctx, rest)
 	case "version", "--version", "-v":
@@ -62,6 +71,10 @@ func usage(w io.Writer) {
 	_, _ = fmt.Fprint(w, `Usage: repo-keeper <command> [flags]
 
 Commands:
+  init                    write a starter configuration file
+  config validate         check the configuration file
+  daemon                  run the background service (scheduled syncs)
+  status                  show tracked repositories and their last sync
   sync <repo>             fetch, fast-forward the default branch, optionally clean merged branches
   cleanup <repo>          evaluate/delete merged local branches (dry-run unless --cleanup=auto)
   restore <repo> <branch> bring back a branch deleted by cleanup (kept 30 days)
@@ -69,6 +82,6 @@ Commands:
   doctor                  check git version and state directory
   version                 print version
 
-Run "repo-keeper <command> -h" for flags. Daemon, UI and provider discovery arrive in later milestones.
+Run "repo-keeper <command> -h" for flags. UI and provider discovery arrive in later milestones.
 `)
 }

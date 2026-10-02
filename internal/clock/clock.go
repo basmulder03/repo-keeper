@@ -75,3 +75,22 @@ func (f *Fake) Advance(d time.Duration) {
 	}
 	f.waiters = kept
 }
+
+// Waiters returns how many After channels are still pending (lets tests sync with goroutines).
+func (f *Fake) Waiters() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.waiters)
+}
+
+// BlockUntil spins until at least n waiters are registered or the deadline passes; it reports success.
+func (f *Fake) BlockUntil(n int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if f.Waiters() >= n {
+			return true
+		}
+		time.Sleep(time.Millisecond) //nolint:forbidigo // real-time poll for test synchronisation only
+	}
+	return false
+}
