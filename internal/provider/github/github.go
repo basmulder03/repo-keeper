@@ -50,6 +50,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 
 func (g *gh) Kind() provider.Kind { return provider.GitHub }
 func (g *gh) APIHost() string     { return g.base.Host }
+func (g *gh) GitUsername() string { return "x-access-token" }
 
 // APIError is a non-2xx answer.
 type APIError struct {

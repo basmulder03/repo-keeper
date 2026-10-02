@@ -181,3 +181,38 @@ func TestDiscover_ShowsPlanWithoutChangingAnything(t *testing.T) {
 		t.Fatal("discover must not create anything")
 	}
 }
+
+func TestAccounts_Add_GitLab_AndDeviceLoginRefusedForIt(t *testing.T) {
+	gl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+tok {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if r.URL.Path == "/api/v4/user" {
+			_, _ = w.Write([]byte(`{"username":"gina"}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer gl.Close()
+	a, out, errb, cfg, _ := setup(t)
+	ctx := context.Background()
+
+	if code := a.run(ctx, []string{"accounts", "add", "lab", "--provider", "gitlab", "--device", "--client-id", "x", "--config", cfg}); code != 2 || !strings.Contains(errb.String(), "only available for github") {
+		t.Fatalf("device for gitlab: code=%d err=%s", code, errb)
+	}
+	a.in = strings.NewReader(tok + "\n")
+	if code := a.run(ctx, []string{"accounts", "add", "lab", "--provider", "gitlab", "--base-url", gl.URL, "--token-stdin", "--include", "acme/**", "--config", cfg}); code != 0 {
+		t.Fatalf("add: code=%d err=%s", code, errb)
+	}
+	if !strings.Contains(out.String(), "authenticated as gina") {
+		t.Fatalf("out=%s", out)
+	}
+	body, _ := os.ReadFile(cfg)
+	if !strings.Contains(string(body), `provider = "gitlab"`) || !strings.Contains(string(body), `include = ["acme/**"]`) {
+		t.Fatalf("config=%s", body)
+	}
+	if code := a.run(ctx, []string{"config", "validate", "--config", cfg}); code != 0 {
+		t.Fatalf("config invalid: %s", errb)
+	}
+}

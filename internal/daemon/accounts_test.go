@@ -323,3 +323,85 @@ func TestDaemon_TokenNeverLogged(t *testing.T) {
 		t.Fatal("expected log output")
 	}
 }
+
+// fakeGitLab serves one nested-group project whose clone URL is a local bare repo.
+type fakeGitLab struct {
+	mu      sync.Mutex
+	cloneTo string
+	mrs     string
+}
+
+func (f *fakeGitLab) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if r.Header.Get("Authorization") != "Bearer "+ghToken {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"message":"401 Unauthorized"}`))
+		return
+	}
+	switch r.URL.EscapedPath() {
+	case "/api/v4/user":
+		_, _ = w.Write([]byte(`{"username":"gina"}`))
+	case "/api/v4/projects":
+		_, _ = fmt.Fprintf(w, `[{"id":7,"path_with_namespace":"acme/platform/infra/terraform","default_branch":"main","http_url_to_repo":%q,"ssh_url_to_repo":%q,"visibility":"private"}]`, f.cloneTo, f.cloneTo)
+	case "/api/v4/projects/acme%2Fplatform%2Finfra%2Fterraform/merge_requests":
+		_, _ = w.Write([]byte(f.mrs))
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func TestDaemon_GitLab_NestedGroups_ClonedAndSquashCleanedViaMR(t *testing.T) {
+	e := gitxtest.New(t)
+	e.Git(e.Work, "checkout", "-q", "-b", "feat")
+	e.Commit(e.Work, "f1.txt", "1", "one")
+	e.Commit(e.Work, "f2.txt", "2", "two")
+	e.Git(e.Work, "push", "-q", "-u", "origin", "feat")
+	e.Git(e.Work, "checkout", "-q", "main")
+
+	gl := &fakeGitLab{cloneTo: e.Origin}
+	srv := httptest.NewServer(gl)
+	defer srv.Close()
+	root := filepath.Join(t.TempDir(), "code")
+	cfg := strings.ReplaceAll(acctCfg(root, srv.URL, tokenFile(t), `cleanup = "auto"`+"\n"+`include = ["acme/**"]`), `provider = "github"`, `provider = "gitlab"`)
+	r := start(t, e, cfg)
+
+	dest := filepath.Join(root, "gitlab", "acme", "platform", "infra", "terraform")
+	r.waitFor(t, "nested clone", func() bool { rs := r.repos(t); return len(rs) == 1 && rs[0].LastReason == "cloned" })
+	if _, err := os.Stat(filepath.Join(dest, "README.md")); err != nil {
+		t.Fatalf("nested working tree missing: %v", err)
+	}
+	if a := r.account(t); a.Status != "ok" || a.Login != "gina" || a.Repos != 1 {
+		t.Fatalf("account=%+v", a)
+	}
+
+	e.Git(dest, "branch", "--track", "feat", "origin/feat")
+	tip := e.Git(dest, "rev-parse", "feat")
+	e.Git(e.Work, "merge", "-q", "--squash", "feat")
+	e.Git(e.Work, "commit", "-q", "-m", "squash feat")
+	e.Git(e.Work, "push", "-q", "origin", "main")
+	e.Git(e.Origin, "branch", "-D", "feat")
+	gl.mu.Lock()
+	gl.mrs = fmt.Sprintf(`[{"source_branch":"feat","sha":%q,"source_project_id":7,"target_project_id":7,"merged_at":"2026-01-01T00:00:00Z"}]`, tip)
+	gl.mu.Unlock()
+
+	r.clk.BlockUntil(3, time.Second)
+	r.clk.Advance(45 * time.Minute)
+	r.waitFor(t, "feat deleted via merge request evidence", func() bool {
+		_, err := e.R.Run(context.Background(), dest, "rev-parse", "--verify", "-q", "refs/heads/feat")
+		return err != nil
+	})
+	if data, _ := os.ReadFile(filepath.Join(r.d.StateDir, "audit.jsonl")); !strings.Contains(string(data), "pr-merged-tip-matches") {
+		t.Fatalf("journal=%s", data)
+	}
+}
+
+func TestCredFor_UsesTheProvidersUsername(t *testing.T) {
+	c := credFor("https://gitlab.example.com/a/b.git", "oauth2", secrets.New("tok"))
+	if c == nil || c.Username != "oauth2" || c.Host != "gitlab.example.com" {
+		t.Fatalf("c=%+v", c)
+	}
+	if credFor("git@host:a/b.git", "oauth2", secrets.New("tok")) != nil || credFor("/local/path", "u", secrets.New("tok")) != nil || credFor("https://h/x", "u", secrets.Token{}) != nil {
+		t.Fatal("non-https remotes and empty tokens must not get a credential")
+	}
+}

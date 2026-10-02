@@ -15,7 +15,7 @@ import (
 
 	"github.com/basmulder03/repo-keeper/internal/config"
 	"github.com/basmulder03/repo-keeper/internal/provider"
-	_ "github.com/basmulder03/repo-keeper/internal/provider/github" // registers the github provider
+	_ "github.com/basmulder03/repo-keeper/internal/provider/all" // registers every platform
 	"github.com/basmulder03/repo-keeper/internal/ratelimit"
 	"github.com/basmulder03/repo-keeper/internal/secrets"
 	"github.com/basmulder03/repo-keeper/internal/store"

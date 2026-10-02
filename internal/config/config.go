@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -19,6 +18,8 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 
 	"github.com/basmulder03/repo-keeper/internal/cleanup"
+	"github.com/basmulder03/repo-keeper/internal/provider"
+	_ "github.com/basmulder03/repo-keeper/internal/provider/all" // registers every platform for validation
 )
 
 // MinInterval is the hard floor so config can never make repo-keeper abusive (FR-R4).
@@ -83,8 +84,8 @@ type UI struct {
 // Account is a platform login whose repositories are discovered and cloned automatically.
 type Account struct {
 	Name     string `toml:"name"`
-	Provider string `toml:"provider"` // github
-	BaseURL  string `toml:"base_url"` // API base, e.g. https://ghe.example.com/api/v3; default is the public cloud
+	Provider string `toml:"provider"` // github | gitlab
+	BaseURL  string `toml:"base_url"` // API base: GHES https://ghe.example.com/api/v3, GitLab https://gitlab.example.com; default is the public cloud
 	// Credential source; with neither set the OS keychain entry "account/<name>" is used.
 	TokenEnv          string   `toml:"token_env"`
 	TokenFile         string   `toml:"token_file"`
@@ -188,8 +189,8 @@ func (c Config) Validate() error {
 			bad("account[%d].name %q is used twice", i, a.Name)
 		}
 		names[a.Name] = true
-		if a.Provider != "github" {
-			bad("account[%d].provider %q is not supported (github)", i, a.Provider)
+		if !provider.Known(provider.Kind(a.Provider)) {
+			bad("account[%d].provider %q is not supported (available: %s)", i, a.Provider, strings.Join(provider.Kinds(), ", "))
 		}
 		if a.TokenEnv != "" && a.TokenFile != "" {
 			bad("account[%d]: set only one of token_env and token_file", i)
@@ -215,8 +216,8 @@ func (c Config) Validate() error {
 			bad("account[%d].cleanup %q must be off, dry-run or auto", i, a.CleanupMode)
 		}
 		for _, g := range append(append([]string{}, a.Include...), a.Exclude...) {
-			if _, err := path.Match(g, "x/y"); err != nil {
-				bad("account[%d]: invalid glob %q", i, g)
+			if err := provider.ValidGlob(g); err != nil {
+				bad("account[%d]: invalid glob %q: %v", i, g, err)
 			}
 		}
 	}

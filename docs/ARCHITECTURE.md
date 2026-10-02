@@ -70,11 +70,13 @@ type Provider interface {
     MergedRefs(ctx context.Context, r RepoRef, branches []string) (map[string]MergeInfo, error)
     // Limits exposes the last-seen quota for UI and budgeting.
     Limits() Quota
+    // GitUsername is the user git presents with the token over HTTPS.
+    GitUsername() string
     // CheckAuth validates the credential and its scopes.
     CheckAuth(ctx context.Context) (AuthStatus, error)
 }
 ```
-Capabilities are declared (`Caps()`), so features degrade gracefully (e.g. generic git has no `MergedRefs`; cleanup falls back to `git cherry`).
+Platforms register themselves (`provider.Register`) and are enabled by one import in `internal/provider/all`. Every provider must pass the shared contract suite in `providertest` (complete paged listing with nested namespaces, correct flags, ErrAuth without echoing the token, merged-PR lookup that ignores forks and unmerged PRs, cancellation). Include/exclude globs: `*` within a level, `**` across levels.
 
 ## 4. Data model (SQLite)
 

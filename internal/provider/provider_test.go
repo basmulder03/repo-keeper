@@ -26,8 +26,16 @@ func TestMatches(t *testing.T) {
 		{"case insensitive", []string{"ACME/*"}, nil, "acme/Api", true},
 		{"exclude wins", []string{"acme/*"}, []string{"acme/archive-*"}, "acme/archive-2019", false},
 		{"star does not cross slash", []string{"*"}, nil, "acme/api", false},
+		{"double star crosses levels", []string{"acme/**"}, nil, "acme/platform/infra/tf", true},
+		{"single star one level only", []string{"acme/*"}, nil, "acme/platform/infra/tf", false},
+		{"middle double star", []string{"acme/**/tf"}, nil, "acme/platform/infra/tf", true},
+		{"question mark", []string{"acme/ap?"}, nil, "acme/api", true},
+		{"question mark not slash", []string{"acme?api"}, nil, "acme/api", false},
+		{"literal dots are literal", []string{"a.b/c"}, nil, "axb/c", false},
+		{"exclude nested", []string{"**"}, []string{"**/archive*"}, "g/sub/archive-old", false},
 		{"exclude only", nil, []string{"*/secret"}, "acme/secret", false},
 		{"bad glob matches nothing", []string{"["}, nil, "a/b", false},
+		{"empty glob matches nothing", []string{""}, nil, "a/b", false},
 	}
 	for _, tc := range tests {
 		if got := Matches(tc.inc, tc.exc, repo(tc.full)); got != tc.want {
@@ -56,5 +64,18 @@ func TestLocalPath(t *testing.T) {
 func TestNew_UnknownKind(t *testing.T) {
 	if _, err := New("nope", Config{}); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestValidGlob(t *testing.T) {
+	for _, ok := range []string{"a/b", "acme/*", "acme/**", "a?c/**/x", "*/archive-*"} {
+		if err := ValidGlob(ok); err != nil {
+			t.Errorf("%q: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"", "[abc]/x", "a\\b", "a]"} {
+		if ValidGlob(bad) == nil {
+			t.Errorf("%q should be invalid", bad)
+		}
 	}
 }

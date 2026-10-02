@@ -106,8 +106,8 @@ func quoteList(l []string) string {
 func (a *app) accountsAdd(ctx context.Context, args []string) int {
 	fs := a.newFlagSet("accounts add")
 	cfgPath := fs.String("config", "", "config file")
-	prov := fs.String("provider", "github", "platform")
-	base := fs.String("base-url", "", "API base URL (GitHub Enterprise: https://host/api/v3)")
+	prov := fs.String("provider", "github", "platform: github | gitlab")
+	base := fs.String("base-url", "", "API base URL (GitHub Enterprise: https://host/api/v3, self-managed GitLab: https://host)")
 	stdin := fs.Bool("token-stdin", false, "read the token from the first line of stdin")
 	device := fs.Bool("device", false, "log in with the OAuth device flow")
 	clientID := fs.String("client-id", "", "OAuth/GitHub App client id for --device")
@@ -147,6 +147,9 @@ func (a *app) accountsAdd(ctx context.Context, args []string) int {
 			_, _ = fmt.Fprintln(a.err, err)
 			return 1
 		}
+	case *device && acct.Provider != "github":
+		_, _ = fmt.Fprintf(a.err, "device login is only available for github; for %s use a personal, project or group access token with read_api and read_repository (--token-stdin, --token-file or --token-env)\n", acct.Provider)
+		return 2
 	case *device:
 		if tok, err = a.deviceLogin(ctx, *clientID, *scope, *webURL); err != nil {
 			_, _ = fmt.Fprintln(a.err, err)

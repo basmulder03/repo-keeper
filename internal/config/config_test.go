@@ -176,3 +176,14 @@ func TestParse_LoopbackHTTPBaseURL_Allowed(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestParse_Accounts_GitLabAccepted_UnknownProviderListsChoices(t *testing.T) {
+	root := "[general]\nroot = \"/r\"\n"
+	if _, err := Parse([]byte(root + "[[account]]\nname=\"gl\"\nprovider=\"gitlab\"\nbase_url=\"https://gitlab.example.com\"\ninclude=[\"acme/**\"]")); err != nil {
+		t.Fatalf("gitlab rejected: %v", err)
+	}
+	_, err := Parse([]byte(root + "[[account]]\nname=\"x\"\nprovider=\"svn\""))
+	if err == nil || !strings.Contains(err.Error(), "github, gitlab") {
+		t.Fatalf("err=%v", err)
+	}
+}

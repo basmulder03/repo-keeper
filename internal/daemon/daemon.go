@@ -303,12 +303,12 @@ func isGitRepo(path string) bool {
 }
 
 // credFor builds an HTTPS credential scoped to the remote's host; SSH and local remotes need none.
-func credFor(rawURL string, tok secrets.Token) *gitx.Cred {
+func credFor(rawURL, user string, tok secrets.Token) *gitx.Cred {
 	u, err := url.Parse(rawURL)
 	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || tok.IsZero() {
 		return nil
 	}
-	return &gitx.Cred{Host: u.Host, Username: "x-access-token", Secret: tok}
+	return &gitx.Cred{Host: u.Host, Username: user, Secret: tok}
 }
 
 func failure(reason string, err error, k sched.Kind, started, now time.Time) sched.Result {
@@ -333,7 +333,7 @@ func (d *Daemon) job(ctx context.Context, repo store.Repo) sched.Result {
 	}
 
 	if tg.acct != nil && !isGitRepo(repo.Path) {
-		return d.clone(ctx, repo, tg, tok, started)
+		return d.clone(ctx, repo, tg, tok, prov.GitUsername(), started)
 	}
 
 	g := d.runner.Repo(repo.Path)
@@ -348,7 +348,7 @@ func (d *Daemon) job(ctx context.Context, repo store.Repo) sched.Result {
 	}
 	var lookup cleanup.MergedLookup
 	if tg.acct != nil {
-		g = g.WithCred(credFor(remoteURL, tok))
+		g = g.WithCred(credFor(remoteURL, prov.GitUsername(), tok))
 		lookup = func(ctx context.Context, names []string) (map[string]string, error) {
 			return prov.MergedBranches(ctx, provider.Repo{FullName: repo.FullName}, names)
 		}
@@ -389,7 +389,7 @@ func (d *Daemon) job(ctx context.Context, repo store.Repo) sched.Result {
 }
 
 // clone fetches a newly discovered repository; an occupied path is never overwritten.
-func (d *Daemon) clone(ctx context.Context, repo store.Repo, tg target, tok secrets.Token, started time.Time) sched.Result {
+func (d *Daemon) clone(ctx context.Context, repo store.Repo, tg target, tok secrets.Token, gitUser string, started time.Time) sched.Result {
 	if _, err := os.Lstat(repo.Path); err == nil {
 		return failure("path-occupied", fmt.Errorf("%s exists but is not a git repository; move it away or exclude %s", repo.Path, repo.FullName), sched.NeedsUser, started, d.Clock.Now())
 	}
@@ -405,7 +405,7 @@ func (d *Daemon) clone(ctx context.Context, repo store.Repo, tg target, tok secr
 		}
 		return sched.Result{NoRecord: true, Kind: sched.Transient}
 	}
-	err = d.runner.Clone(ctx, repo.CloneURL, repo.Path, credFor(repo.CloneURL, tok), tg.acct.set.PartialClone)
+	err = d.runner.Clone(ctx, repo.CloneURL, repo.Path, credFor(repo.CloneURL, gitUser, tok), tg.acct.set.PartialClone)
 	res := syncer.Result{Status: syncer.OK}
 	if err != nil {
 		res = syncer.Result{Status: syncer.Failed, Reason: "clone", Err: err}

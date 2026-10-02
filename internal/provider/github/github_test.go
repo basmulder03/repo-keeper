@@ -16,6 +16,7 @@ import (
 	"github.com/basmulder03/repo-keeper/internal/clock"
 	"github.com/basmulder03/repo-keeper/internal/httpx"
 	"github.com/basmulder03/repo-keeper/internal/provider"
+	"github.com/basmulder03/repo-keeper/internal/provider/providertest"
 	"github.com/basmulder03/repo-keeper/internal/ratelimit"
 	"github.com/basmulder03/repo-keeper/internal/secrets"
 )
@@ -262,4 +263,57 @@ func TestDevice_Start_RejectsIncompleteResponse(t *testing.T) {
 	if _, err := d.Start(t.Context()); err == nil {
 		t.Fatal("expected error")
 	}
+}
+
+func TestContract(t *testing.T) {
+	const good = "ghp_GOODtokenValue0123456789abcdef"
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+good || r.UserAgent() != "repo-keeper/test" {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"message":"Bad credentials"}`))
+			return
+		}
+		switch {
+		case r.URL.Path == "/user":
+			_, _ = w.Write([]byte(`{"login":"octo"}`))
+		case r.URL.Path == "/user/repos" && r.URL.Query().Get("page") == "":
+			w.Header().Set("Link", fmt.Sprintf(`<%s/user/repos?page=2>; rel="next"`, srv.URL))
+			_, _ = w.Write([]byte(`[
+			 {"id":1,"name":"api","full_name":"acme/api","clone_url":"https://github.com/acme/api.git","ssh_url":"git@github.com:acme/api.git","default_branch":"main","private":true},
+			 {"id":2,"name":"web","full_name":"acme/web","clone_url":"https://github.com/acme/web.git","ssh_url":"git@github.com:acme/web.git","default_branch":"trunk"}]`))
+		case r.URL.Path == "/user/repos":
+			_, _ = w.Write([]byte(`[
+			 {"id":3,"name":"old","full_name":"octo/old","clone_url":"https://github.com/octo/old.git","ssh_url":"git@github.com:octo/old.git","default_branch":"master","archived":true,"fork":true},
+			 {"id":4,"name":"off","full_name":"octo/off","clone_url":"https://github.com/octo/off.git","ssh_url":"git@github.com:octo/off.git","default_branch":"main","disabled":true}]`))
+		case r.URL.Path == "/repos/acme/api/pulls":
+			_, _ = w.Write([]byte(`[
+			 {"merged_at":"2026-01-02T00:00:00Z","head":{"ref":"feat-a","sha":"aaa111","repo":{"full_name":"acme/api"}}},
+			 {"merged_at":null,"head":{"ref":"feat-b","sha":"bbb222","repo":{"full_name":"acme/api"}}},
+			 {"merged_at":"2026-01-01T00:00:00Z","head":{"ref":"feat-c","sha":"ccc333","repo":{"full_name":"someone/api"}}},
+			 {"merged_at":"2025-12-01T00:00:00Z","head":{"ref":"feat-a","sha":"old000","repo":{"full_name":"acme/api"}}}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	api := provider.Repo{FullName: "acme/api", Namespace: []string{"acme"}, Name: "api"}
+	providertest.Run(t, providertest.Case{
+		New: func(t *testing.T, tok string) provider.Provider {
+			p, err := New(provider.Config{BaseURL: srv.URL, Token: secrets.New(tok), HTTP: client(t)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return p
+		},
+		GoodToken: good, Kind: provider.GitHub, WantLogin: "octo",
+		WantRepos: []provider.Repo{
+			{FullName: "acme/api", Namespace: []string{"acme"}, Name: "api", DefaultBranch: "main", CloneURL: "https://github.com/acme/api.git", SSHURL: "git@github.com:acme/api.git", Private: true},
+			{FullName: "acme/web", Namespace: []string{"acme"}, Name: "web", DefaultBranch: "trunk", CloneURL: "https://github.com/acme/web.git", SSHURL: "git@github.com:acme/web.git"},
+			{FullName: "octo/old", Namespace: []string{"octo"}, Name: "old", DefaultBranch: "master", CloneURL: "https://github.com/octo/old.git", SSHURL: "git@github.com:octo/old.git", Archived: true, Fork: true},
+			{FullName: "octo/off", Namespace: []string{"octo"}, Name: "off", DefaultBranch: "main", CloneURL: "https://github.com/octo/off.git", SSHURL: "git@github.com:octo/off.git", Disabled: true},
+		},
+		MergedRepo: api, MergedBranches: []string{"feat-a", "feat-b", "feat-c"},
+		WantMerged: map[string]string{"feat-a": "aaa111"},
+	})
 }

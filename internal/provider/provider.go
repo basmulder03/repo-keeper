@@ -7,10 +7,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/basmulder03/repo-keeper/internal/httpx"
@@ -20,8 +21,13 @@ import (
 // Kind names a platform.
 type Kind string
 
-// GitHub is github.com and GitHub Enterprise Server.
-const GitHub Kind = "github"
+// Supported platform kinds.
+const (
+	// GitHub is github.com and GitHub Enterprise Server.
+	GitHub Kind = "github"
+	// GitLab is gitlab.com and self-managed GitLab.
+	GitLab Kind = "gitlab"
+)
 
 // ErrAuth means the credential is missing, revoked or expired; retrying will not help until it is replaced.
 var ErrAuth = errors.New("provider: authentication failed")
@@ -58,6 +64,8 @@ type Provider interface {
 	CheckAuth(ctx context.Context) (Auth, error)
 	// ListRepos returns every repository the account can access.
 	ListRepos(ctx context.Context) ([]Repo, error)
+	// GitUsername is the username git presents together with the token over HTTPS.
+	GitUsername() string
 	// MergedBranches maps branch -> head SHA of its merged PR/MR, for the given branches of repo.
 	MergedBranches(ctx context.Context, repo Repo, branches []string) (map[string]string, error)
 }
@@ -77,6 +85,19 @@ var factories = map[Kind]Factory{}
 // Register makes a platform available by kind (called from init of each subpackage's importer).
 func Register(k Kind, f Factory) { factories[k] = f }
 
+// Known reports whether a platform kind is registered.
+func Known(k Kind) bool { _, ok := factories[k]; return ok }
+
+// Kinds lists registered platform kinds (for error messages).
+func Kinds() []string {
+	var ks []string
+	for k := range factories {
+		ks = append(ks, string(k))
+	}
+	sort.Strings(ks)
+	return ks
+}
+
 // New builds the provider for kind.
 func New(k Kind, cfg Config) (Provider, error) {
 	f, ok := factories[k]
@@ -86,13 +107,52 @@ func New(k Kind, cfg Config) (Provider, error) {
 	return f(cfg)
 }
 
-// Matches applies include/exclude globs to a repo's full name (case-insensitive; "*" does not cross "/").
-// An empty include list means everything; exclude always wins.
+// Globs: `*` matches within one path level, `**` matches across levels (for nested GitLab groups), `?` one character
+// within a level; everything else is literal and matching is case-insensitive. Character classes are rejected.
+var globCache sync.Map
+
+// ValidGlob reports why a pattern is unusable ("" error means fine).
+func ValidGlob(p string) error {
+	if p == "" {
+		return errors.New("empty pattern")
+	}
+	if strings.ContainsAny(p, "[]\\") {
+		return errors.New("character classes and escapes are not supported; use * ** ?")
+	}
+	return nil
+}
+
+func compileGlob(p string) *regexp.Regexp {
+	if re, ok := globCache.Load(p); ok {
+		return re.(*regexp.Regexp)
+	}
+	var b strings.Builder
+	b.WriteString("(?i)^")
+	for i := 0; i < len(p); i++ {
+		switch {
+		case strings.HasPrefix(p[i:], "**"):
+			b.WriteString(".*")
+			i++
+		case p[i] == '*':
+			b.WriteString("[^/]*")
+		case p[i] == '?':
+			b.WriteString("[^/]")
+		default:
+			b.WriteString(regexp.QuoteMeta(string(p[i])))
+		}
+	}
+	b.WriteString("$")
+	re := regexp.MustCompile(b.String())
+	globCache.Store(p, re)
+	return re
+}
+
+// Matches applies include/exclude globs to a repo's full name. An empty include list means everything;
+// exclude always wins; an invalid pattern matches nothing.
 func Matches(include, exclude []string, r Repo) bool {
-	name := strings.ToLower(r.FullName)
 	hit := func(globs []string) bool {
 		for _, g := range globs {
-			if ok, err := path.Match(strings.ToLower(g), name); err == nil && ok {
+			if ValidGlob(g) == nil && compileGlob(g).MatchString(r.FullName) {
 				return true
 			}
 		}

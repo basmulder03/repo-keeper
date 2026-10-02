@@ -40,6 +40,14 @@
 - **Git over HTTPS** also counts toward abuse detection; use `ls-remote` to skip no-op fetches.
 
 ## GitLab (gitlab.com, self-managed)
+
+**Implemented (M4).** REST API v4 only. Endpoints: `GET /user`, `GET /personal_access_tokens/self` (scopes and expiry; absent for OAuth/project tokens, which is fine), `GET /projects?membership=true&pagination=keyset&per_page=100` (discovery, `Link` rel=next), `GET /projects/{url-encoded full path}/merge_requests?state=merged` (only for upstream-deleted branches git cannot prove merged; at most 3 pages). Requests use `Authorization: Bearer` (accepted for personal, project and group access tokens), the project User-Agent, and never send the token to another host.
+
+**Nested groups:** `acme/platform/infra/terraform` is cloned to `<root>/gitlab/acme/platform/infra/terraform`. Include/exclude globs match the full path: `*` stays within one level, `**` crosses levels (`acme/**`). Empty projects are skipped until they have a commit. Archived projects are skipped by default (`skip_archived`), forks are kept unless `skip_forks = true`.
+
+**Credentials:** a personal access token with `read_api` + `read_repository`, or better a *group/project access token* with the Reporter role. `accounts add` and `accounts check` warn about `api`/`write_repository` scopes and impending expiry. Git over HTTPS uses the username `oauth2` with the token. **Device flow is not implemented for GitLab yet**: its tokens expire after two hours and need a stored refresh token, which warrants its own design.
+
+**Self-managed:** `base_url = "https://gitlab.example.com"` (the `/api/v4` suffix is added for you). Private CA support arrives with the hardening milestone.
 - **Docs:** GitLab.com rate limits, API docs, Terms. *Last verified: TBD at M4.*
 - **Auth:** PAT (`read_api`, `read_repository`), OAuth device grant, project/group access tokens for narrower scope.
 - **Limits:** SaaS has per-user/IP API limits with `RateLimit-*` and `Retry-After`; self-managed limits are admin-configured: read headers, don't hard-code.
