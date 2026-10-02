@@ -65,3 +65,15 @@ func TestError_Message_ScrubsTokens(t *testing.T) {
 		t.Fatalf("password leaked: %v", err)
 	}
 }
+
+func FuzzParseVersion_NeverPanics(f *testing.F) {
+	for _, s := range []string{"git version 2.43.0", "git version 2.39.3 (Apple Git-146)", "", "9999999999999999999.1", "git version", "2.", ".5"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		v, err := ParseVersion(s)
+		if err == nil && (v.Major < 0 || v.Minor < 0 || v.Patch < 0) {
+			t.Fatalf("negative component from %q: %+v", s, v)
+		}
+	})
+}

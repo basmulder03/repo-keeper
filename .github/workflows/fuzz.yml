@@ -1,0 +1,24 @@
+name: fuzz
+on:
+  schedule: [{ cron: "41 3 * * 0" }]   # weekly
+  workflow_dispatch:
+    inputs:
+      fuzztime: { description: "time per target", default: "60s" }
+permissions:
+  contents: read
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - name: Fuzz every target
+        run: FUZZTIME="${{ inputs.fuzztime || '60s' }}" ./scripts/fuzz.sh
+      - name: Keep crashers (commit them under testdata/fuzz to make them permanent regression tests)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashers
+          path: "**/testdata/fuzz/**"
+          if-no-files-found: ignore

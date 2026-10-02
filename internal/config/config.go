@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"os"
@@ -24,6 +25,9 @@ import (
 
 // MinInterval is the hard floor so config can never make repo-keeper abusive (FR-R4).
 const MinInterval = 5 * time.Minute
+
+// maxConfigBytes bounds what we will read and parse; real configs are a few KiB.
+const maxConfigBytes = 1 << 20
 
 // MinDiscoveryInterval keeps repository listing (many API calls) politely infrequent.
 const MinDiscoveryInterval = time.Hour
@@ -64,6 +68,8 @@ type General struct {
 	PerHost     int      `toml:"per_host"`     // parallel operations per remote host (default 2)
 	QuietHours  string   `toml:"quiet_hours"`  // "23:00-07:00" local time; no scheduled syncs inside
 	AllBranches *bool    `toml:"all_branches"` // fetch all branches (default true)
+	Secrets     string   `toml:"secrets"`      // keyring (default) | file (passphrase-encrypted; headless hosts)
+	SecretsFile string   `toml:"secrets_file"` // default <state dir>/secrets.enc
 	Root        string   `toml:"root"`         // clone root for account-discovered repos (absolute)
 }
 
@@ -86,6 +92,7 @@ type Account struct {
 	Name     string `toml:"name"`
 	Provider string `toml:"provider"` // github | gitlab
 	BaseURL  string `toml:"base_url"` // API base: GHES https://ghe.example.com/api/v3, GitLab https://gitlab.example.com; default is the public cloud
+	CAFile   string `toml:"ca_file"`  // PEM bundle with the private CA of a self-hosted instance (absolute path)
 	// Credential source; with neither set the OS keychain entry "account/<name>" is used.
 	TokenEnv          string   `toml:"token_env"`
 	TokenFile         string   `toml:"token_file"`
@@ -139,9 +146,17 @@ func Parse(b []byte) (Config, error) {
 // Load reads and parses the file at path.
 func Load(path string) (Config, error) {
 	// #nosec G304 -- user-chosen config path
-	b, err := os.ReadFile(path) //nolint:gosec // see #nosec above
+	f, err := os.Open(path) //nolint:gosec // see #nosec above
 	if err != nil {
 		return Config{}, fmt.Errorf("config: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	b, err := io.ReadAll(io.LimitReader(f, maxConfigBytes+1))
+	if err != nil {
+		return Config{}, fmt.Errorf("config: %w", err)
+	}
+	if len(b) > maxConfigBytes {
+		return Config{}, fmt.Errorf("config: %s is larger than %d KiB", path, maxConfigBytes>>10)
 	}
 	return Parse(b)
 }
@@ -171,6 +186,12 @@ func (c Config) Validate() error {
 	if c.Cleanup.MinAge < 0 {
 		bad("cleanup.min_age must not be negative")
 	}
+	if c.General.Secrets != "" && c.General.Secrets != "keyring" && c.General.Secrets != "file" {
+		bad("general.secrets %q must be keyring or file", c.General.Secrets)
+	}
+	if c.General.SecretsFile != "" && !filepath.IsAbs(c.General.SecretsFile) {
+		bad("general.secrets_file must be an absolute path")
+	}
 	if c.UI.Port < 0 || c.UI.Port > 65535 {
 		bad("ui.port must be 0..65535")
 	}
@@ -194,6 +215,9 @@ func (c Config) Validate() error {
 		}
 		if a.TokenEnv != "" && a.TokenFile != "" {
 			bad("account[%d]: set only one of token_env and token_file", i)
+		}
+		if a.CAFile != "" && !filepath.IsAbs(a.CAFile) {
+			bad("account[%d].ca_file must be an absolute path", i)
 		}
 		if a.TokenFile != "" && !filepath.IsAbs(a.TokenFile) {
 			bad("account[%d].token_file must be an absolute path", i)

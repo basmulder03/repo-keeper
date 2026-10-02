@@ -51,7 +51,7 @@ var unsafeKeyPrefixes = []string{
 
 // CheckSafeConfig refuses repos whose local config could execute commands or redirect remotes.
 func (g *Repo) CheckSafeConfig(ctx context.Context) error {
-	out, err := g.run(ctx, "config", "--local", "--name-only", "--list", "-z")
+	out, err := g.run(ctx, "config", "--local", "--list", "-z")
 	if err != nil {
 		if ExitCode(err) == 1 { // no local config entries
 			return nil
@@ -59,10 +59,12 @@ func (g *Repo) CheckSafeConfig(ctx context.Context) error {
 		return err
 	}
 	var bad []string
-	for _, k := range strings.Split(out, "\x00") {
+	for _, entry := range strings.Split(out, "\x00") {
+		k, val, _ := strings.Cut(entry, "\n")
 		lk := strings.ToLower(k)
 		switch {
 		case lk == "":
+		case isStandardLFSFilter(lk, val): // `git lfs install --local` writes exactly these; anything else is not LFS
 		case strings.HasSuffix(lk, ".insteadof") || strings.HasSuffix(lk, ".pushinsteadof"):
 			bad = append(bad, k)
 		case strings.HasPrefix(lk, "filter.") && (strings.HasSuffix(lk, ".clean") || strings.HasSuffix(lk, ".smudge") || strings.HasSuffix(lk, ".process")):
@@ -82,6 +84,22 @@ func (g *Repo) CheckSafeConfig(ctx context.Context) error {
 		return fmt.Errorf("%w: %s", ErrUnsafeConfig, strings.Join(bad, ", "))
 	}
 	return nil
+}
+
+// lfsFilters are the only filter commands accepted in repo-local config: exactly what `git lfs install` writes.
+var lfsFilters = map[string][]string{
+	"filter.lfs.clean":   {"git-lfs clean -- %f"},
+	"filter.lfs.smudge":  {"git-lfs smudge -- %f", "git-lfs smudge --skip -- %f"},
+	"filter.lfs.process": {"git-lfs filter-process", "git-lfs filter-process --skip"},
+}
+
+func isStandardLFSFilter(lowerKey, value string) bool {
+	for _, ok := range lfsFilters[lowerKey] {
+		if value == ok {
+			return true
+		}
+	}
+	return false
 }
 
 // gitDir returns the absolute .git directory (worktree-aware).

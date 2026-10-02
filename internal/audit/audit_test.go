@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -54,5 +55,56 @@ func TestFile_Append_Concurrent(t *testing.T) {
 	wg.Wait()
 	if got, _ := f.ReadAll(); len(got) != 20 {
 		t.Fatalf("lines=%d", len(got))
+	}
+}
+
+func FuzzReadAll_ArbitraryFileContent_NeverPanics(f *testing.F) {
+	for _, s := range []string{"{\"action\":\"deleted\"}\n", "garbage\n\n{", "\x00\xff", strings.Repeat("a", 2<<20)} {
+		f.Add([]byte(s))
+	}
+	f.Fuzz(func(t *testing.T, data []byte) {
+		p := filepath.Join(t.TempDir(), "a.jsonl")
+		if err := os.WriteFile(p, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		j, _ := OpenFile(p)
+		_, _ = j.ReadAll()
+	})
+}
+
+func TestOpenFile_UnusableDirectory_Fails(t *testing.T) {
+	blocker := filepath.Join(t.TempDir(), "file")
+	_ = os.WriteFile(blocker, []byte("x"), 0o600)
+	if _, err := OpenFile(filepath.Join(blocker, "sub", "audit.jsonl")); err == nil {
+		t.Fatal("a path under a regular file must fail")
+	}
+}
+
+func TestFile_Append_FailsWhenTargetIsADirectory(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "audit.jsonl")
+	if err := os.Mkdir(p, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	f, err := OpenFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Append(t.Context(), Entry{Action: Deleted}); err == nil {
+		t.Fatal("append must report the failure so cleanup fails closed")
+	}
+	if _, err := f.ReadAll(); err == nil {
+		t.Fatal("reading a directory must error")
+	}
+}
+
+func TestMem_AppendRecordsAndCanFail(t *testing.T) {
+	var m Mem
+	if err := m.Append(t.Context(), Entry{Action: Restored}); err != nil || len(m.Entries) != 1 {
+		t.Fatalf("entries=%v err=%v", m.Entries, err)
+	}
+	m.Err = os.ErrPermission
+	if err := m.Append(t.Context(), Entry{}); err == nil || len(m.Entries) != 1 {
+		t.Fatal("injected failure must surface and not record")
 	}
 }

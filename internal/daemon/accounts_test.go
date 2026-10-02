@@ -5,6 +5,7 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -302,7 +303,7 @@ func TestDaemon_TokenNeverLogged(t *testing.T) {
 	root := filepath.Join(dir, "code")
 	cfg := filepath.Join(dir, "config.toml")
 	writeCfg(t, cfg, acctCfg(root, srv.URL, tokenFile(t), ""))
-	d := &Daemon{ConfigPath: cfg, StateDir: filepath.Join(dir, "state"), Runner: e.R, Log: log.logger, Redactor: log.red, Secrets: &secrets.Mem{}}
+	d := &Daemon{ConfigPath: cfg, StateDir: filepath.Join(dir, "state"), Runner: e.R, Log: log.logger, Redactor: log.red, Secrets: &secrets.Mem{}, AllowLocalCloneURLs: true}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- d.Run(ctx) }()
@@ -397,11 +398,111 @@ func TestDaemon_GitLab_NestedGroups_ClonedAndSquashCleanedViaMR(t *testing.T) {
 }
 
 func TestCredFor_UsesTheProvidersUsername(t *testing.T) {
-	c := credFor("https://gitlab.example.com/a/b.git", "oauth2", secrets.New("tok"))
-	if c == nil || c.Username != "oauth2" || c.Host != "gitlab.example.com" {
+	c := credFor("https://gitlab.example.com/a/b.git", "oauth2", "/etc/ca.pem", secrets.New("tok"))
+	if c == nil || c.Username != "oauth2" || c.Host != "gitlab.example.com" || c.CAFile != "/etc/ca.pem" {
 		t.Fatalf("c=%+v", c)
 	}
-	if credFor("git@host:a/b.git", "oauth2", secrets.New("tok")) != nil || credFor("/local/path", "u", secrets.New("tok")) != nil || credFor("https://h/x", "u", secrets.Token{}) != nil {
+	if credFor("git@host:a/b.git", "oauth2", "", secrets.New("tok")) != nil || credFor("/local/path", "u", "", secrets.New("tok")) != nil || credFor("https://h/x", "u", "", secrets.Token{}) != nil || credFor("http://gitlab.example.com/a.git", "u", "", secrets.New("tok")) != nil {
 		t.Fatal("non-https remotes and empty tokens must not get a credential")
 	}
+}
+
+func TestDaemon_HostileDiscovery_UnsafeURLsSkipped_SymlinkedNamespaceRefused(t *testing.T) {
+	e := gitxtest.New(t)
+	gh := &fakeGH{}
+	srv := httptest.NewServer(gh)
+	defer srv.Close()
+	gh.set(
+		ghRepo("acme/file", "file:///etc", false),
+		ghRepo("acme/plain", "http://example.com/acme/plain.git", false),
+		ghRepo("acme/ext", "ext::sh -c touch% /tmp/pwned", false),
+		ghRepo("acme/opt", "-oProxyCommand=evil", false),
+		ghRepo("acme/local", e.Origin, false),
+	)
+	root := filepath.Join(t.TempDir(), "code")
+	outside := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(root, "github"), 0o750)
+	_ = os.Symlink(outside, filepath.Join(root, "github", "acme")) // namespace dir redirected elsewhere
+
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "config.toml")
+	writeCfg(t, cfg, acctCfg(root, srv.URL, tokenFile(t), ""))
+	d := &Daemon{ConfigPath: cfg, StateDir: filepath.Join(dir, "state"), Runner: e.R, NoUI: true} // production URL rules
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- d.Run(ctx) }()
+	<-d.Ready()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if evs, _ := d.Store.RecentEvents(context.Background(), 50); len(evs) >= 4 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	evs, _ := d.Store.RecentEvents(context.Background(), 50)
+	cancel()
+	<-done
+	var skipped int
+	for _, ev := range evs {
+		if ev.Code == "repo-skipped" {
+			skipped++
+		}
+	}
+	if skipped != 5 {
+		t.Fatalf("all five clone URLs (file, http, ext, option, local path) must be skipped under production rules; skipped=%d events=%+v", skipped, evs)
+	}
+	if rs, _ := d.Store.ListRepos(context.Background()); len(rs) != 0 {
+		t.Fatalf("nothing unsafe may be tracked: %+v", rs)
+	}
+	if ents, _ := os.ReadDir(outside); len(ents) != 0 {
+		t.Fatal("something was written through the symlink")
+	}
+}
+
+func TestDaemon_SymlinkedNamespace_CloneRefused(t *testing.T) {
+	e := gitxtest.New(t)
+	gh := &fakeGH{}
+	srv := httptest.NewServer(gh)
+	defer srv.Close()
+	gh.set(ghRepo("acme/api", e.Origin, false))
+	root := filepath.Join(t.TempDir(), "code")
+	outside := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(root, "github"), 0o750)
+	if err := os.Symlink(outside, filepath.Join(root, "github", "acme")); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	r := start(t, e, acctCfg(root, srv.URL, tokenFile(t), ""))
+	r.waitFor(t, "unsafe-path flagged", func() bool {
+		rs := r.repos(t)
+		return len(rs) == 1 && rs[0].NeedsAttention && rs[0].LastReason == "unsafe-path"
+	})
+	if ents, _ := os.ReadDir(outside); len(ents) != 0 {
+		t.Fatal("a clone was written through the symlink")
+	}
+}
+
+func TestDaemon_PrivateCA_AccountTrustsOnlyItsConfiguredBundle(t *testing.T) {
+	e := gitxtest.New(t)
+	gh := &fakeGH{}
+	srv := httptest.NewTLSServer(gh) // self-signed: untrusted by default
+	defer srv.Close()
+	gh.set(ghRepo("acme/api", e.Origin, false))
+	caPath := filepath.Join(t.TempDir(), "ca.pem")
+	_ = os.WriteFile(caPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw}), 0o600)
+
+	// without ca_file: the account is flagged, nothing is tracked, verification was NOT skipped
+	r1 := start(t, e, acctCfg(filepath.Join(t.TempDir(), "code"), srv.URL, tokenFile(t), ""))
+	r1.waitFor(t, "tls failure surfaced", func() bool { a := r1.account(t); return a.Status == "error" })
+	if a := r1.account(t); !strings.Contains(a.Err, "certificate") {
+		t.Fatalf("the error must say why: %q", a.Err)
+	}
+	if len(r1.repos(t)) != 0 {
+		t.Fatal("untrusted server must not yield repositories")
+	}
+
+	// with ca_file: discovery and cloning work
+	e2 := gitxtest.New(t)
+	gh.set(ghRepo("acme/api", e2.Origin, false))
+	r2 := start(t, e2, acctCfg(filepath.Join(t.TempDir(), "code2"), srv.URL, tokenFile(t), fmt.Sprintf("ca_file = %q", caPath)))
+	r2.waitFor(t, "clone via private CA", func() bool { rs := r2.repos(t); return len(rs) == 1 && rs[0].LastReason == "cloned" })
 }

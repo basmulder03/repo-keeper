@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/basmulder03/repo-keeper/internal/clock"
 	"github.com/basmulder03/repo-keeper/internal/config"
 	"github.com/basmulder03/repo-keeper/internal/httpx"
+	"github.com/basmulder03/repo-keeper/internal/paths"
 	"github.com/basmulder03/repo-keeper/internal/provider"
 	"github.com/basmulder03/repo-keeper/internal/provider/github"
 	"github.com/basmulder03/repo-keeper/internal/ratelimit"
@@ -134,6 +136,7 @@ func (a *app) accountsAdd(ctx context.Context, args []string) int {
 		_, _ = fmt.Fprintf(a.err, "%v\n(run `repo-keeper init` first)\n", err)
 		return 1
 	}
+	store := a.secretStore(cfg)
 	if _, dup := findAccount(cfg, name); dup {
 		_, _ = fmt.Fprintf(a.err, "account %q already exists in %s\n", name, path)
 		return 1
@@ -143,7 +146,7 @@ func (a *app) accountsAdd(ctx context.Context, args []string) int {
 	var tok secrets.Token
 	switch {
 	case external:
-		if tok, err = a.credSource(acct).Resolve(a.secrets); err != nil {
+		if tok, err = a.credSource(acct).Resolve(store); err != nil {
 			_, _ = fmt.Fprintln(a.err, err)
 			return 1
 		}
@@ -179,7 +182,7 @@ func (a *app) accountsAdd(ctx context.Context, args []string) int {
 	}
 	a.printAuth(auth)
 	if !external {
-		if err := a.secrets.Set("account/"+name, tok); err != nil {
+		if err := store.Set("account/"+name, tok); err != nil {
 			_, _ = fmt.Fprintln(a.err, err, "\nHint: no keychain? use --token-file or --token-env instead.")
 			return 1
 		}
@@ -268,6 +271,7 @@ func (a *app) accountsList(_ context.Context, args []string) int {
 		_, _ = fmt.Fprintln(a.err, err)
 		return 1
 	}
+	store := a.secretStore(cfg)
 	tw := tabwriter.NewWriter(a.out, 2, 4, 2, ' ', 0)
 	_, _ = fmt.Fprintln(tw, "NAME\tPROVIDER\tAPI\tCREDENTIAL\tAVAILABLE")
 	for _, ac := range cfg.Accounts {
@@ -278,7 +282,7 @@ func (a *app) accountsList(_ context.Context, args []string) int {
 		case ac.TokenFile != "":
 			src = "file:" + ac.TokenFile
 		}
-		if _, err := a.credSource(ac).Resolve(a.secrets); err != nil {
+		if _, err := a.credSource(ac).Resolve(store); err != nil {
 			avail = "no (" + shortErr(err) + ")"
 		}
 		base := ac.BaseURL
@@ -314,12 +318,13 @@ func (a *app) accountsCheck(ctx context.Context, args []string) int {
 		_, _ = fmt.Fprintln(a.err, err)
 		return 1
 	}
+	store := a.secretStore(cfg)
 	ac, ok := findAccount(cfg, name)
 	if !ok {
 		_, _ = fmt.Fprintf(a.err, "no account %q in the configuration\n", name)
 		return 1
 	}
-	tok, err := a.credSource(ac).Resolve(a.secrets)
+	tok, err := a.credSource(ac).Resolve(store)
 	if err != nil {
 		_, _ = fmt.Fprintln(a.err, err)
 		return 1
@@ -343,6 +348,7 @@ func (a *app) accountsCheck(ctx context.Context, args []string) int {
 
 func (a *app) accountsRm(_ context.Context, args []string) int {
 	fs := a.newFlagSet("accounts rm")
+	cfgPath := fs.String("config", "", "config file")
 	name, rest := "", args
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		name, rest = args[0], args[1:]
@@ -351,7 +357,9 @@ func (a *app) accountsRm(_ context.Context, args []string) int {
 		_, _ = fmt.Fprintln(a.err, "usage: repo-keeper accounts rm <name>")
 		return 2
 	}
-	if err := a.secrets.Delete("account/" + name); err != nil {
+	cfg, _, _ := a.loadConfig(*cfgPath) // best effort: only needed to know which backend holds the secret
+	store := a.secretStore(cfg)
+	if err := store.Delete("account/" + name); err != nil {
 		_, _ = fmt.Fprintln(a.err, err)
 		return 1
 	}
@@ -371,13 +379,14 @@ func (a *app) cmdDiscover(ctx context.Context, args []string) int {
 		_, _ = fmt.Fprintln(a.err, err)
 		return 1
 	}
+	store := a.secretStore(cfg)
 	code := 0
 	for _, ac := range cfg.Accounts {
 		if *only != "" && ac.Name != *only {
 			continue
 		}
 		s := cfg.ResolveAccount(ac)
-		tok, err := a.credSource(ac).Resolve(a.secrets)
+		tok, err := a.credSource(ac).Resolve(store)
 		if err != nil {
 			_, _ = fmt.Fprintf(a.err, "%s: %v\n", ac.Name, err)
 			code = 1
@@ -429,3 +438,21 @@ func (a *app) cmdDiscover(ctx context.Context, args []string) int {
 }
 
 func exists(p string) bool { _, err := os.Lstat(p); return err == nil }
+
+// secretStore picks the secret backend from the configuration: the OS keychain (default) or the
+// passphrase-encrypted file (headless hosts; passphrase from $REPO_KEEPER_PASSPHRASE_FILE).
+func (a *app) secretStore(cfg config.Config) secrets.Store {
+	if a.secrets != nil {
+		return a.secrets // injected (tests)
+	}
+	if cfg.General.Secrets == "file" {
+		p := cfg.General.SecretsFile
+		if p == "" {
+			if dir, err := paths.StateDir(); err == nil {
+				p = filepath.Join(dir, "secrets.enc")
+			}
+		}
+		return &secrets.EncryptedFile{Path: p, Passphrase: secrets.PassphraseFromEnvFile}
+	}
+	return secrets.Keyring{}
+}

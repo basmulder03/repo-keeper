@@ -119,7 +119,7 @@ func (s Source) Resolve(store Store) (Token, error) {
 
 // readTokenFile reads a token file, refusing group/world-accessible files on Unix (like ssh does for keys).
 func readTokenFile(path string) (Token, error) {
-	// #nosec G304 -- user-configured secret file
+	// #nosec G304 G703 -- user-configured secret file (token/passphrase), opened read-only
 	f, err := os.Open(path) //nolint:gosec // see #nosec above
 	if err != nil {
 		return Token{}, fmt.Errorf("secrets: %w", err)

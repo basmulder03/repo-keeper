@@ -187,3 +187,36 @@ func TestParse_Accounts_GitLabAccepted_UnknownProviderListsChoices(t *testing.T)
 		t.Fatalf("err=%v", err)
 	}
 }
+
+func TestLoad_OversizedFile_Refused(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "c.toml")
+	if err := os.WriteFile(p, []byte("# "+strings.Repeat("x", maxConfigBytes)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(p); err == nil || !strings.Contains(err.Error(), "larger than") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func FuzzParseQuietHours_NeverPanics(f *testing.F) {
+	for _, s := range []string{"23:00-07:00", "", "-", "99:99-00:00", "1:1-2:2", "\x00-\x00"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		q, err := ParseQuietHours(s)
+		if err == nil {
+			_ = q.Contains(time.Now())
+		}
+	})
+}
+
+func TestParse_SecretsBackend(t *testing.T) {
+	if _, err := Parse([]byte("[general]\nsecrets = \"file\"\nsecrets_file = \"/var/lib/rk/secrets.enc\"")); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"[general]\nsecrets = \"vault\"", "[general]\nsecrets_file = \"rel/path\""} {
+		if _, err := Parse([]byte(bad)); err == nil {
+			t.Errorf("%q must be rejected", bad)
+		}
+	}
+}

@@ -98,7 +98,7 @@ func start(t *testing.T, e *gitxtest.Env, cfg string) *rig {
 	dir := t.TempDir()
 	r := &rig{e: e, clk: clock.NewFake(time.Now()), cfgPath: filepath.Join(dir, "config.toml"), done: make(chan error, 1)}
 	writeCfg(t, r.cfgPath, cfg)
-	r.d = &Daemon{ConfigPath: r.cfgPath, StateDir: filepath.Join(dir, "state"), Runner: e.R, Clock: r.clk, Tick: time.Minute}
+	r.d = &Daemon{ConfigPath: r.cfgPath, StateDir: filepath.Join(dir, "state"), Runner: e.R, Clock: r.clk, Tick: time.Minute, AllowLocalCloneURLs: true}
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
 	go func() { r.done <- r.d.Run(ctx) }()
@@ -251,4 +251,15 @@ func TestDaemon_MissingConfig_HelpfulError(t *testing.T) {
 	if err := d.Run(t.Context()); err == nil || !strings.Contains(err.Error(), "repo-keeper init") {
 		t.Fatalf("err=%v", err)
 	}
+}
+
+func FuzzHostOf_NeverPanics_AndNeverEmpty(f *testing.F) {
+	for _, s := range []string{"https://github.com/o/r", "git@host:o/r", "ssh://u@h:22/x", "", "C:\\x", "::", "https://%zz", "\x00@:"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		if hostOf(s) == "" {
+			t.Fatalf("empty host for %q (must fall back to \"local\")", s)
+		}
+	})
 }

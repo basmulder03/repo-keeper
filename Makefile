@@ -5,7 +5,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-.PHONY: build test lint security fmt tidy gen check snapshot repro
+.PHONY: build test lint security fmt tidy gen check snapshot repro coverage fuzz perf
 .DEFAULT_GOAL := build
 
 build: ## static binary in ./bin
@@ -13,6 +13,15 @@ build: ## static binary in ./bin
 
 test: ## race detector + coverage
 	go test -race -cover -coverprofile=coverage.out ./...
+
+coverage: test ## per-package coverage floors; 100 % on the deletion safety predicate
+	./scripts/coverage-gate.sh coverage.out
+
+fuzz: ## run every fuzz target (FUZZTIME=15s each by default)
+	./scripts/fuzz.sh
+
+perf: build ## 500-repo synthetic fleet vs. the NFR-1/NFR-3 budgets
+	N=500 ./scripts/perf.sh
 
 lint:
 	golangci-lint run ./...
@@ -36,4 +45,4 @@ snapshot: ## local release build (tarballs, deb, rpm) into ./dist without signin
 repro: ## prove the release artifacts are byte-reproducible
 	./scripts/check-reproducible.sh
 
-check: test lint security ## what CI and every PR must pass
+check: coverage lint security ## what CI and every PR must pass

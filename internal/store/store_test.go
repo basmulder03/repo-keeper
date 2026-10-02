@@ -235,3 +235,48 @@ func TestAccounts_SaveListUpdate(t *testing.T) {
 		t.Fatalf("as=%+v err=%v", as, err)
 	}
 }
+
+func TestOpen_UnusableLocation_Fails(t *testing.T) {
+	blocker := filepath.Join(t.TempDir(), "file")
+	_ = os.WriteFile(blocker, []byte("x"), 0o600)
+	if _, err := Open(filepath.Join(blocker, "sub", "x.db")); err == nil {
+		t.Fatal("must fail under a regular file")
+	}
+}
+
+func TestStore_EmptyReads_AndClosedDB(t *testing.T) {
+	s, _ := open(t)
+	ctx := t.Context()
+	if rs, err := s.ListRepos(ctx); err != nil || len(rs) != 0 {
+		t.Fatalf("rs=%v err=%v", rs, err)
+	}
+	if as, err := s.ListAccounts(ctx); err != nil || len(as) != 0 {
+		t.Fatalf("as=%v err=%v", as, err)
+	}
+	if m, err := s.LatestRuns(ctx); err != nil || len(m) != 0 {
+		t.Fatalf("m=%v err=%v", m, err)
+	}
+	if ev, err := s.RecentEvents(ctx, 5); err != nil || len(ev) != 0 {
+		t.Fatalf("ev=%v err=%v", ev, err)
+	}
+	_ = s.Close()
+	if _, err := s.ListRepos(ctx); err == nil {
+		t.Fatal("queries on a closed store must error")
+	}
+	if err := s.Defer(ctx, 1, time.Now()); err == nil {
+		t.Fatal("writes on a closed store must error")
+	}
+}
+
+func TestLatestRuns_ReturnsNewestPerRepo(t *testing.T) {
+	s, _ := open(t)
+	ctx := t.Context()
+	_ = s.SyncRepos(ctx, []Spec{{Path: "/a", Remote: "o", Interval: time.Hour}, {Path: "/b", Remote: "o", Interval: time.Hour}}, at(t0))
+	rs, _ := s.ListRepos(ctx)
+	_ = s.Record(ctx, Run{RepoID: rs[0].ID, Started: t0, Finished: t0, Status: "failed"})
+	_ = s.Record(ctx, Run{RepoID: rs[0].ID, Started: t0, Finished: t0, Status: "ok", Detail: "{}"})
+	m, err := s.LatestRuns(ctx)
+	if err != nil || len(m) != 1 || m[rs[0].ID].Status != "ok" || m[rs[0].ID].Detail != "{}" {
+		t.Fatalf("m=%+v err=%v", m, err)
+	}
+}

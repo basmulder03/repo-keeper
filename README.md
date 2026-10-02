@@ -2,7 +2,7 @@
 
 A lightweight, local-first background agent that keeps every repository you can access on GitHub, GitLab, Bitbucket, Azure DevOps and Gitea/Forgejo cloned and up to date, safely.
 
-> **Status:** early development: sync engine, GitHub and GitLab, rate limiting, daemon, web UI, tray and Linux packaging (Nix modules, deb, rpm) work; more providers and hardening are next. See [`docs/`](docs/README.md), [installation](docs/INSTALL.md) and the [roadmap](docs/ROADMAP.md).
+> **Status:** feature-complete for GitHub and GitLab on Linux: sync engine, safe cleanup, rate limiting, daemon, web UI, tray, packaging, hardening and fuzzing are done and measured. More providers (M6) and a beta soak are next. See [`docs/`](docs/README.md), [installation](docs/INSTALL.md), [security review](docs/SECURITY-REVIEW.md) and the [roadmap](docs/ROADMAP.md).
 
 ## What it does
 
@@ -32,6 +32,7 @@ A lightweight, local-first background agent that keeps every repository you can 
 | [Testing](docs/TESTING.md) | Strategy and quality gates |
 | [Implementation plan](docs/IMPLEMENTATION-PLAN.md) | Repo layout, work breakdown |
 | [Roadmap](docs/ROADMAP.md) | Milestones |
+| [Security review](docs/SECURITY-REVIEW.md) · [Performance](docs/PERFORMANCE.md) | Self-audit findings, measured budgets |
 | [Decisions (ADRs)](docs/adr/) | Why we chose what we chose |
 | [Decisions & open items](docs/OPEN-QUESTIONS.md) | Resolved choices, what remains |
 | [AGENTS.md](AGENTS.md) | Rules for AI coding agents |

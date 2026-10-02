@@ -16,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"sync"
 	"time"
 
@@ -131,6 +132,9 @@ func (c *Client) Do(ctx context.Context, req *http.Request) (*Response, error) {
 		if err == nil && !retry {
 			return resp, nil
 		}
+		if err != nil && !retry { // permanent failure (certificate problem, local refusal): retrying cannot help
+			return nil, err
+		}
 		var we *ratelimit.WaitError
 		if errors.As(err, &we) || ctx.Err() != nil {
 			return nil, err
@@ -166,6 +170,10 @@ func (c *Client) once(ctx context.Context, req *http.Request) (resp *Response, r
 	// #nosec G704 -- URL validated by allowed(): https, or loopback http for tests
 	hr, err := c.hc.Do(r) //nolint:gosec // see #nosec above
 	if err != nil {
+		if isCertError(err) {
+			permit.Release(ratelimit.Response{Status: http.StatusOK}) // our trust configuration, not the host's health
+			return nil, false, fmt.Errorf("httpx: %s %s: %w (add the issuing CA with ca_file if this is a private instance)", r.Method, r.URL.Redacted(), err)
+		}
 		permit.Release(ratelimit.Response{Err: err})
 		return nil, true, fmt.Errorf("httpx: %s %s: %w", r.Method, r.URL.Redacted(), err)
 	}
@@ -206,4 +214,36 @@ func (c *Client) once(ctx context.Context, req *http.Request) (resp *Response, r
 func cacheKey(r *http.Request) string {
 	sum := sha256.Sum256([]byte(r.Header.Get("Authorization")))
 	return hex.EncodeToString(sum[:8]) + " " + r.URL.String()
+}
+
+// LoadCAFile returns the system roots plus the certificates in a PEM file (private CA of a self-hosted instance).
+// Verification stays on; this only widens the set of trusted issuers for that account.
+func LoadCAFile(path string) (*x509.CertPool, error) {
+	// #nosec G304 -- user-configured CA bundle, opened read-only
+	f, err := os.Open(path) //nolint:gosec // see #nosec above
+	if err != nil {
+		return nil, fmt.Errorf("httpx: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	pem, err := io.ReadAll(io.LimitReader(f, 1<<20+1))
+	if err != nil || len(pem) > 1<<20 {
+		return nil, fmt.Errorf("httpx: cannot read CA file %s", path)
+	}
+	pool, err := x509.SystemCertPool()
+	if err != nil || pool == nil {
+		pool = x509.NewCertPool()
+	}
+	if !pool.AppendCertsFromPEM(pem) {
+		return nil, fmt.Errorf("httpx: %s contains no PEM certificates", path)
+	}
+	return pool, nil
+}
+
+// isCertError reports TLS verification failures (unknown issuer, wrong host, expired): never transient, never the host's fault.
+func isCertError(err error) bool {
+	var cv *tls.CertificateVerificationError
+	var ua x509.UnknownAuthorityError
+	var hn x509.HostnameError
+	var ci x509.CertificateInvalidError
+	return errors.As(err, &cv) || errors.As(err, &ua) || errors.As(err, &hn) || errors.As(err, &ci)
 }

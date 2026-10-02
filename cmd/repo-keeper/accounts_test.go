@@ -216,3 +216,34 @@ func TestAccounts_Add_GitLab_AndDeviceLoginRefusedForIt(t *testing.T) {
 		t.Fatalf("config invalid: %s", errb)
 	}
 }
+
+func TestAccounts_EncryptedFileBackend_EndToEnd(t *testing.T) {
+	a, out, errb, cfg, srv := setup(t)
+	a.secrets = nil // use the real backend selection
+	dir := filepath.Dir(cfg)
+	pass := filepath.Join(dir, "pass")
+	_ = os.WriteFile(pass, []byte("a long passphrase\n"), 0o600)
+	t.Setenv("REPO_KEEPER_PASSPHRASE_FILE", pass)
+	encPath := filepath.Join(dir, "secrets.enc")
+	body, _ := os.ReadFile(cfg)
+	_ = os.WriteFile(cfg, append(body, []byte("secrets = \"file\"\nsecrets_file = \""+encPath+"\"\n")...), 0o600)
+	// "secrets" keys belong to [general], which setup() already opened; the file ends inside it
+	a.in = strings.NewReader(tok + "\n")
+	ctx := context.Background()
+	if code := a.run(ctx, []string{"accounts", "add", "gh", "--base-url", srv.URL, "--token-stdin", "--config", cfg}); code != 0 {
+		t.Fatalf("add: code=%d err=%s", code, errb)
+	}
+	raw, err := os.ReadFile(encPath)
+	if err != nil || strings.Contains(string(raw), tok) {
+		t.Fatalf("encrypted file missing or leaking: %v", err)
+	}
+	out.Reset()
+	if code := a.run(ctx, []string{"accounts", "check", "gh", "--config", cfg}); code != 0 || !strings.Contains(out.String(), "octo") {
+		t.Fatalf("check through the encrypted store: code=%d out=%s err=%s", code, out, errb)
+	}
+	t.Setenv("REPO_KEEPER_PASSPHRASE_FILE", "")
+	errb.Reset()
+	if code := a.run(ctx, []string{"accounts", "check", "gh", "--config", cfg}); code != 1 || !strings.Contains(errb.String(), "REPO_KEEPER_PASSPHRASE_FILE") {
+		t.Fatalf("without a passphrase: code=%d err=%s", code, errb)
+	}
+}

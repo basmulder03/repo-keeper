@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/basmulder03/repo-keeper/internal/config"
+	"github.com/basmulder03/repo-keeper/internal/httpx"
 	"github.com/basmulder03/repo-keeper/internal/provider"
 	_ "github.com/basmulder03/repo-keeper/internal/provider/all" // registers every platform
 	"github.com/basmulder03/repo-keeper/internal/ratelimit"
@@ -58,7 +59,11 @@ func (a *accountRT) get() (provider.Provider, secrets.Token, error) {
 	a.at = now
 	if a.prov == nil || tok.Reveal() != a.token.Reveal() {
 		a.d.Redactor.Add(tok.Reveal())
-		p, err := provider.New(provider.Kind(a.set.Provider), provider.Config{BaseURL: a.set.BaseURL, Token: tok, HTTP: a.d.HTTP})
+		hc, err := a.d.httpFor(a.set.CAFile)
+		if err != nil {
+			return nil, secrets.Token{}, err
+		}
+		p, err := provider.New(provider.Kind(a.set.Provider), provider.Config{BaseURL: a.set.BaseURL, Token: tok, HTTP: hc})
 		if err != nil {
 			return nil, secrets.Token{}, err
 		}
@@ -193,7 +198,7 @@ func (d *Daemon) discover(ctx context.Context, l *liveConfig, a *accountRT) {
 	for _, s := range skipped {
 		d.event(ctx, "warn", 0, "repo-skipped", name+": "+s)
 	}
-	res, err := d.Store.SyncManaged(ctx, name, specs, func(i int) time.Time { return now.Add(time.Duration(i) * 2 * time.Second) })
+	res, err := d.Store.SyncManaged(ctx, name, specs, func(i int) time.Time { return now.Add(time.Duration(i) * firstSyncStagger) })
 	if err != nil {
 		finish("error", err.Error(), now.Add(credentialRetry))
 		return
@@ -234,6 +239,12 @@ func (d *Daemon) specsFor(l *liveConfig, a *accountRT, repos []provider.Repo) (s
 			skipped = append(skipped, r.FullName+": platform returned no clone URL")
 			continue
 		}
+		if !d.AllowLocalCloneURLs {
+			if err := provider.ValidCloneURL(url); err != nil {
+				skipped = append(skipped, r.FullName+": "+err.Error())
+				continue
+			}
+		}
 		specs = append(specs, store.Spec{
 			Path: p, Remote: "origin", Interval: a.set.SyncInterval,
 			FullName: r.FullName, RemoteID: r.ID, CloneURL: url, Archived: r.Archived,
@@ -267,4 +278,32 @@ func levelOf(l string) slog.Level {
 		return slog.LevelWarn
 	}
 	return slog.LevelInfo
+}
+
+// httpFor returns the shared client, or one that additionally trusts the CA bundle (cached per file).
+func (d *Daemon) httpFor(caFile string) (*httpx.Client, error) {
+	if caFile == "" {
+		return d.HTTP, nil
+	}
+	d.httpMu.Lock()
+	defer d.httpMu.Unlock()
+	if c, ok := d.httpByCA[caFile]; ok {
+		return c, nil
+	}
+	pool, err := httpx.LoadCAFile(caFile)
+	if err != nil {
+		return nil, err
+	}
+	c, err := httpx.New(httpx.Config{
+		UserAgent: "repo-keeper/" + d.version() + " (+https://github.com/basmulder03/repo-keeper)",
+		Limiter:   d.Limiter, Clock: d.Clock, MaxWait: maxLimiterWait, RootCAs: pool,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if d.httpByCA == nil {
+		d.httpByCA = map[string]*httpx.Client{}
+	}
+	d.httpByCA[caFile] = c
+	return c, nil
 }

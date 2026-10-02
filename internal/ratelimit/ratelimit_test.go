@@ -232,3 +232,39 @@ func TestSnapshot_ShowsCooldownAndInflight(t *testing.T) {
 	}
 	p.Release(Response{Status: 200})
 }
+
+func TestRelease_HostileRetryAfterAndReset_AreCapped(t *testing.T) {
+	l, _ := newL(Config{})
+	acquire(t, l, "a").Release(Response{Status: 429, Header: http.Header{"Retry-After": {"99999999999"}}})
+	_, err := l.Acquire(t.Context(), "a", time.Second)
+	var we *WaitError
+	if !errors.As(err, &we) || we.RetryAt.Sub(t0) > 24*time.Hour {
+		t.Fatalf("retry-after not capped: %v", err)
+	}
+	acquire(t, l, "b").Release(Response{Status: 200, Header: http.Header{
+		"X-Ratelimit-Limit": {"10"}, "X-Ratelimit-Remaining": {"0"}, "X-Ratelimit-Reset": {"32503680000"}, // year 3000
+	}})
+	_, err = l.Acquire(t.Context(), "b", time.Second)
+	if !errors.As(err, &we) || we.RetryAt.Sub(t0) > 24*time.Hour {
+		t.Fatalf("reset not capped: %v", err)
+	}
+}
+
+func FuzzRelease_HeaderParsing_NeverPanicsAndStaysBounded(f *testing.F) {
+	for _, s := range []string{"120", "Wed, 21 Oct 2026 07:28:00 GMT", "-5", "abc", "99999999999999999999", "", "1e9", "0"} {
+		f.Add(s, s, s, s)
+	}
+	f.Fuzz(func(t *testing.T, retry, limit, remaining, reset string) {
+		l, clk := newL(Config{Rate: 1000, Burst: 100})
+		p, err := l.Acquire(t.Context(), "h", time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p.Release(Response{Status: 429, Header: http.Header{
+			"Retry-After": {retry}, "X-Ratelimit-Limit": {limit}, "X-Ratelimit-Remaining": {remaining}, "X-Ratelimit-Reset": {reset},
+		}})
+		if c := l.CooldownUntil("h"); c.Sub(clk.Now()) > 24*time.Hour+time.Second {
+			t.Fatalf("cooldown %v exceeds the cap (retry=%q reset=%q)", c.Sub(clk.Now()), retry, reset)
+		}
+	})
+}

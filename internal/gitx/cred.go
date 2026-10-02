@@ -21,6 +21,8 @@ type Cred struct {
 	Secret   secrets.Token
 	// Helper is the executable git calls for prompts (default: this binary, which switches mode on EnvMarker).
 	Helper string
+	// CAFile is a PEM bundle git should trust for this host (self-hosted instance with a private CA); not a secret.
+	CAFile string
 }
 
 func (c *Cred) env() ([]string, error) {
@@ -34,13 +36,17 @@ func (c *Cred) env() ([]string, error) {
 			return nil, fmt.Errorf("gitx: locating askpass helper: %w", err)
 		}
 	}
-	return []string{
+	env := []string{
 		"GIT_ASKPASS=" + helper,
 		askpass.EnvMarker + "=1",
 		askpass.EnvHost + "=" + c.Host,
 		askpass.EnvUser + "=" + c.Username,
 		askpass.EnvSecret + "=" + c.Secret.Reveal(),
-	}, nil
+	}
+	if c.CAFile != "" {
+		env = append(env, "GIT_SSL_CAINFO="+c.CAFile)
+	}
+	return env, nil
 }
 
 // WithCred returns a copy of g that authenticates network operations with c.

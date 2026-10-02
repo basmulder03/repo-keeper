@@ -3,6 +3,7 @@
 package provider
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -78,4 +79,86 @@ func TestValidGlob(t *testing.T) {
 			t.Errorf("%q should be invalid", bad)
 		}
 	}
+}
+
+func TestValidCloneURL(t *testing.T) {
+	for _, ok := range []string{"https://github.com/o/r.git", "ssh://git@host:2222/o/r.git", "git@github.com:o/r.git", "https://gitlab.example.com/a/b/c.git"} {
+		if err := ValidCloneURL(ok); err != nil {
+			t.Errorf("%q: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{
+		"", "-oProxyCommand=evil", "http://example.com/r.git", "git://example.com/r.git", "file:///etc/passwd", "/srv/git/r.git", "../r",
+		"ext::sh -c touch% /tmp/x", "https://", "https://host/a b", "ftp://h/r", "C:\\repos\\r", "https://user:pw@host/r\n", "a::b",
+	} {
+		if err := ValidCloneURL(bad); err == nil {
+			t.Errorf("%q must be rejected", bad)
+		} else if strings.Contains(err.Error(), "pw@") {
+			t.Errorf("error leaks credentials: %v", err)
+		}
+	}
+}
+
+func FuzzValidCloneURL_NeverPanics(f *testing.F) {
+	for _, s := range []string{"https://a/b", "git@h:p", "::", "-x", "ssh://[::1"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		if ValidCloneURL(s) == nil && (strings.HasPrefix(s, "-") || strings.Contains(s, "::")) {
+			t.Fatalf("accepted dangerous URL %q", s)
+		}
+	})
+}
+
+func TestCheckNoSymlinks(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "github", "acme"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckNoSymlinks(root, filepath.Join(root, "github", "acme", "new")); err != nil {
+		t.Fatalf("plain tree rejected: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "github", "evil")); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	if err := CheckNoSymlinks(root, filepath.Join(root, "github", "evil", "repo")); err == nil {
+		t.Fatal("clone through a symlinked namespace directory must be refused")
+	}
+	if err := CheckNoSymlinks(root, filepath.Join(outside, "x")); err == nil {
+		t.Fatal("destination outside the root must be refused")
+	}
+	rootLink := filepath.Join(t.TempDir(), "link")
+	_ = os.Symlink(root, rootLink)
+	if err := CheckNoSymlinks(rootLink, filepath.Join(rootLink, "github", "acme", "ok")); err != nil {
+		t.Fatalf("a symlinked root chosen by the user is allowed: %v", err)
+	}
+}
+
+func FuzzLocalPath_NeverEscapesRoot(f *testing.F) {
+	for _, s := range []string{"a/b", "../x", "a/../../b", "a/./b", "a/b/..", "a//b", "A/b/c/d"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, full string) {
+		parts := strings.Split(full, "/")
+		r := Repo{FullName: full, Namespace: parts[:len(parts)-1], Name: parts[len(parts)-1]}
+		root := filepath.Join(os.TempDir(), "rk-fuzz-root")
+		p, err := LocalPath(root, GitHub, r)
+		if err != nil {
+			return
+		}
+		if rel, rerr := filepath.Rel(root, p); rerr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			t.Fatalf("%q escaped the root: %s", full, p)
+		}
+	})
+}
+
+func FuzzMatches_NeverPanics(f *testing.F) {
+	for _, s := range []string{"a/**", "*", "?", "**/x", "[", "a.b", "\\", "(((", "**/**/**"} {
+		f.Add(s, "acme/platform/x")
+	}
+	f.Fuzz(func(t *testing.T, glob, name string) {
+		_ = Matches([]string{glob}, []string{glob}, Repo{FullName: name})
+		_ = Matches([]string{glob}, nil, Repo{FullName: name})
+	})
 }

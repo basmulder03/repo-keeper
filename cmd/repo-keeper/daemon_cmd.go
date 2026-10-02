@@ -19,6 +19,7 @@ import (
 	"github.com/basmulder03/repo-keeper/internal/instance"
 	"github.com/basmulder03/repo-keeper/internal/obs"
 	"github.com/basmulder03/repo-keeper/internal/paths"
+	"github.com/basmulder03/repo-keeper/internal/secrets"
 	"github.com/basmulder03/repo-keeper/internal/store"
 )
 
@@ -128,9 +129,13 @@ func (a *app) cmdDaemon(ctx context.Context, args []string) int {
 		return 1
 	}
 	red := &obs.Redactor{}
+	var cfgForStore config.Config
+	if loaded, err := config.Load(c.configPath); err == nil {
+		cfgForStore = loaded
+	}
 	d := &daemon.Daemon{
 		ConfigPath: c.configPath, StateDir: c.stateDir, Runner: runner, Clock: a.clock,
-		NoUI: *noUI, Version: version, Secrets: a.secrets, Redactor: red, Log: obs.New(a.err, lvl, *jsonLog, red),
+		NoUI: *noUI, Version: version, Secrets: a.secretStoreAt(cfgForStore, c.stateDir), Redactor: red, Log: obs.New(a.err, lvl, *jsonLog, red),
 	}
 	if err := d.Run(ctx); err != nil {
 		if errors.Is(err, instance.ErrRunning) {
@@ -220,4 +225,12 @@ func until(t time.Time) string {
 		return "in " + d.Round(time.Second).String()
 	}
 	return "due"
+}
+
+// secretStoreAt is secretStore with an explicit state directory (the daemon may run with --state-dir).
+func (a *app) secretStoreAt(cfg config.Config, stateDir string) secrets.Store {
+	if a.secrets == nil && cfg.General.Secrets == "file" && cfg.General.SecretsFile == "" {
+		cfg.General.SecretsFile = filepath.Join(stateDir, "secrets.enc")
+	}
+	return a.secretStore(cfg)
 }

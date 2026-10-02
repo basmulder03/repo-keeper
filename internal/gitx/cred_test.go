@@ -122,3 +122,18 @@ func TestClone_FailureLeavesNoDirectory(t *testing.T) {
 		t.Fatal("existing destination was damaged")
 	}
 }
+
+func TestCred_CAFileReachesGitAsEnvOnly(t *testing.T) {
+	var seen []string
+	r := gitx.Runner{Bin: "git", Observe: func(rec gitx.CommandRecord) { seen = append(seen, rec.Args...) }}
+	_ = r
+	c := &gitx.Cred{Host: "h", Username: "u", Secret: secrets.New("tok"), Helper: "/bin/true", CAFile: "/etc/private-ca.pem"}
+	e := gitxtest.New(t)
+	e.R.Observe = func(rec gitx.CommandRecord) { seen = append(seen, rec.Args...) }
+	_, _ = e.Repo(e.Work).WithCred(c).LsRemote(t.Context(), "origin")
+	for _, a := range seen {
+		if strings.Contains(a, "private-ca") || strings.Contains(a, "tok") {
+			t.Fatalf("credential material in argv: %q", a)
+		}
+	}
+}

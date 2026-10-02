@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -34,6 +35,10 @@ import (
 )
 
 const (
+	// firstSyncStagger spreads the first syncs of newly tracked repos; real hosts are additionally paced by the
+	// rate limiter, so this only avoids a burst of process spawns on this machine.
+	firstSyncStagger = 250 * time.Millisecond
+
 	reloadEvery    = 30 * time.Second
 	maxLimiterWait = 30 * time.Second
 )
@@ -58,6 +63,8 @@ type Daemon struct {
 	Secrets secrets.Store
 	// Redactor, when set, learns every token so logs can never contain one.
 	Redactor *obs.Redactor
+	// AllowLocalCloneURLs lifts the https/ssh-only rule for clone URLs; tests use local bare repos. Never set in production.
+	AllowLocalCloneURLs bool
 
 	live      atomic.Pointer[liveConfig]
 	ready     chan struct{}
@@ -75,6 +82,8 @@ type Daemon struct {
 	uiAddr     atomic.Value
 	reloadWake chan struct{}
 	discWake   chan struct{}
+	httpMu     sync.Mutex
+	httpByCA   map[string]*httpx.Client
 	discMu     sync.Mutex
 	nextDisc   map[string]time.Time
 	accounts   map[string]store.Account
@@ -222,7 +231,7 @@ func (d *Daemon) reconcile(ctx context.Context, l *liveConfig) error {
 		s := l.cfg.Resolve(r)
 		specs = append(specs, store.Spec{Path: s.Path, Remote: s.Remote, Interval: s.Interval})
 	}
-	return d.Store.SyncRepos(ctx, specs, func(i int) time.Time { return now.Add(time.Duration(i) * 2 * time.Second) })
+	return d.Store.SyncRepos(ctx, specs, func(i int) time.Time { return now.Add(time.Duration(i) * firstSyncStagger) })
 }
 
 // reloadLoop polls the config file and applies valid changes; invalid files never replace a working config.
@@ -303,12 +312,15 @@ func isGitRepo(path string) bool {
 }
 
 // credFor builds an HTTPS credential scoped to the remote's host; SSH and local remotes need none.
-func credFor(rawURL, user string, tok secrets.Token) *gitx.Cred {
+func credFor(rawURL, user, caFile string, tok secrets.Token) *gitx.Cred {
 	u, err := url.Parse(rawURL)
-	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || tok.IsZero() {
+	if err != nil || tok.IsZero() {
 		return nil
 	}
-	return &gitx.Cred{Host: u.Host, Username: user, Secret: tok}
+	if u.Scheme != "https" && (u.Scheme != "http" || !isLoopbackHost(u.Hostname())) { // never offer a token for cleartext to remote hosts
+		return nil
+	}
+	return &gitx.Cred{Host: u.Host, Username: user, Secret: tok, CAFile: caFile}
 }
 
 func failure(reason string, err error, k sched.Kind, started, now time.Time) sched.Result {
@@ -348,13 +360,13 @@ func (d *Daemon) job(ctx context.Context, repo store.Repo) sched.Result {
 	}
 	var lookup cleanup.MergedLookup
 	if tg.acct != nil {
-		g = g.WithCred(credFor(remoteURL, prov.GitUsername(), tok))
+		g = g.WithCred(credFor(remoteURL, prov.GitUsername(), tg.acct.set.CAFile, tok))
 		lookup = func(ctx context.Context, names []string) (map[string]string, error) {
 			return prov.MergedBranches(ctx, provider.Repo{FullName: repo.FullName}, names)
 		}
 	}
 
-	permit, err := d.Limiter.Acquire(ctx, host, maxLimiterWait)
+	permit, err := d.acquire(ctx, host)
 	if err != nil {
 		var we *ratelimit.WaitError
 		if errors.As(err, &we) {
@@ -393,11 +405,21 @@ func (d *Daemon) clone(ctx context.Context, repo store.Repo, tg target, tok secr
 	if _, err := os.Lstat(repo.Path); err == nil {
 		return failure("path-occupied", fmt.Errorf("%s exists but is not a git repository; move it away or exclude %s", repo.Path, repo.FullName), sched.NeedsUser, started, d.Clock.Now())
 	}
+	if root := d.live.Load().cfg.General.Root; root != "" {
+		if err := provider.CheckNoSymlinks(root, repo.Path); err != nil {
+			return failure("unsafe-path", err, sched.NeedsUser, started, d.Clock.Now())
+		}
+	}
+	if !d.AllowLocalCloneURLs {
+		if err := provider.ValidCloneURL(repo.CloneURL); err != nil {
+			return failure("unsafe-url", err, sched.NeedsUser, started, d.Clock.Now())
+		}
+	}
 	host := hostOf(repo.CloneURL)
 	if host != repo.Host {
 		_ = d.Store.SetHost(ctx, repo.ID, host)
 	}
-	permit, err := d.Limiter.Acquire(ctx, host, maxLimiterWait)
+	permit, err := d.acquire(ctx, host)
 	if err != nil {
 		var we *ratelimit.WaitError
 		if errors.As(err, &we) {
@@ -405,7 +427,7 @@ func (d *Daemon) clone(ctx context.Context, repo store.Repo, tg target, tok secr
 		}
 		return sched.Result{NoRecord: true, Kind: sched.Transient}
 	}
-	err = d.runner.Clone(ctx, repo.CloneURL, repo.Path, credFor(repo.CloneURL, gitUser, tok), tg.acct.set.PartialClone)
+	err = d.runner.Clone(ctx, repo.CloneURL, repo.Path, credFor(repo.CloneURL, gitUser, tg.acct.set.CAFile, tok), tg.acct.set.PartialClone)
 	res := syncer.Result{Status: syncer.OK}
 	if err != nil {
 		res = syncer.Result{Status: syncer.Failed, Reason: "clone", Err: err}
@@ -428,4 +450,25 @@ func (d *Daemon) clone(ctx context.Context, repo store.Repo, tg target, tok secr
 	}
 	d.event(ctx, "info", repo.ID, "cloned", repo.FullName)
 	return sched.Result{Kind: sched.Success, Run: run}
+}
+
+func isLoopbackHost(h string) bool {
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
+}
+
+// permit is a held rate-limit slot, or a no-op for hosts that need none.
+type permit interface{ Release(ratelimit.Response) }
+
+type noPermit struct{}
+
+func (noPermit) Release(ratelimit.Response) {}
+
+// acquire takes a slot for host. "local" (file paths, unparseable remotes) has no server to protect, so it is
+// paced only by the worker pool; every real host goes through the limiter.
+func (d *Daemon) acquire(ctx context.Context, host string) (permit, error) {
+	if host == "local" {
+		return noPermit{}, nil
+	}
+	return d.Limiter.Acquire(ctx, host, maxLimiterWait)
 }

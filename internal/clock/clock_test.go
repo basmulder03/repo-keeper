@@ -53,3 +53,26 @@ func TestReal_Now_IsRecent(t *testing.T) {
 		t.Fatalf("unexpected skew %v", d)
 	}
 }
+
+func TestReal_After_Fires(t *testing.T) {
+	select {
+	case <-(Real{}).After(time.Millisecond):
+	case <-time.After(2 * time.Second):
+		t.Fatal("Real.After never fired")
+	}
+}
+
+func TestFake_WaitersAndBlockUntil(t *testing.T) {
+	f := NewFake(t0)
+	if f.BlockUntil(1, 20*time.Millisecond) {
+		t.Fatal("no waiter exists yet; BlockUntil must time out")
+	}
+	f.After(time.Hour)
+	if f.Waiters() != 1 || !f.BlockUntil(1, time.Second) {
+		t.Fatalf("waiters=%d", f.Waiters())
+	}
+	f.Advance(2 * time.Hour)
+	if f.Waiters() != 0 {
+		t.Fatal("fired waiters must be dropped")
+	}
+}

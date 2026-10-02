@@ -143,14 +143,14 @@ func (f *fake) SaveConfig(_ context.Context, text, ver string) error {
 func (f *fake) Bundle(context.Context) ([]byte, error) { return []byte(`{"ok":true}`), nil }
 
 type env struct {
-	t   *testing.T
+	t   testing.TB
 	s   *Server
 	b   *fake
 	clk *clock.Fake
 	h   http.Handler
 }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t testing.TB) *env {
 	t.Helper()
 	b := &fake{report: cleanup.Report{Mode: "dry-run", Items: []cleanup.Item{{Branch: "feat/" + xss, SHA: "abcdef0123456789", Outcome: cleanup.WouldDelete, Reason: cleanup.DeleteMerged}}}}
 	clk := clock.NewFake(time.Now())
@@ -687,4 +687,34 @@ func TestConfig_ReadOnly_ShownAndSaveRefused(t *testing.T) {
 			t.Fatal("backend save reached despite read-only config")
 		}
 	}
+}
+
+func FuzzUI_HostileRequests_NeverPanicOrReachBackendUnauthenticated(f *testing.F) {
+	e := newEnv(f)
+	for _, s := range []string{"/", "/repos/1", "/repos/../../etc/passwd", "/static/../server.go", "/login?code=%00", "/audit?q=%ff&n=-1", "/repos/99999999999999999999"} {
+		f.Add(s, "GET")
+		f.Add(s, "POST")
+	}
+	f.Fuzz(func(t *testing.T, path, method string) {
+		if !strings.HasPrefix(path, "/") || strings.ContainsAny(path, " \r\n\x00") || (method != "GET" && method != "POST") {
+			return
+		}
+		u, err := url.ParseRequestURI(path)
+		if err != nil {
+			return
+		}
+		r := httptest.NewRequestWithContext(context.Background(), method, u.String(), nil)
+		r.Host = addr
+		w := httptest.NewRecorder()
+		e.h.ServeHTTP(w, r)
+		if strings.HasPrefix(u.Path, "/static/") || u.Path == "/login" || u.Path == "/api/login-url" {
+			return
+		}
+		if w.Code == 200 && (u.Path == "/" || strings.HasPrefix(u.Path, "/repos") || strings.HasPrefix(u.Path, "/config") || strings.HasPrefix(u.Path, "/audit")) {
+			t.Fatalf("%s %s answered 200 without a session", method, path)
+		}
+		if len(e.b.calls) != 0 {
+			t.Fatalf("backend reached without a session: %v", e.b.calls)
+		}
+	})
 }

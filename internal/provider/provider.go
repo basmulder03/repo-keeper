@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -180,4 +182,70 @@ func LocalPath(root string, k Kind, r Repo) (string, error) {
 		return "", fmt.Errorf("provider: path for %q escapes the clone root", r.FullName)
 	}
 	return p, nil
+}
+
+// CheckNoSymlinks refuses a destination whose existing path components below root are symlinks, so a clone can
+// never be redirected outside the clone root (root itself may be a symlink the user chose).
+func CheckNoSymlinks(root, dest string) error {
+	rel, err := filepath.Rel(root, dest)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("provider: %s is outside the clone root", dest)
+	}
+	cur := root
+	for _, seg := range strings.Split(rel, string(filepath.Separator)) {
+		cur = filepath.Join(cur, seg)
+		fi, err := os.Lstat(cur)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil // nothing further exists, nothing further can redirect
+		}
+		if err != nil {
+			return err
+		}
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("provider: %s is a symlink; refusing to clone through it", cur)
+		}
+	}
+	return nil
+}
+
+// ValidCloneURL accepts only remote transports we can authenticate and verify: https, ssh and scp-style ssh.
+// Plain http/git (cleartext), file:, ext:: helpers and local paths are rejected, as is anything that looks like an option.
+func ValidCloneURL(raw string) error {
+	if raw == "" || strings.HasPrefix(raw, "-") || strings.ContainsAny(raw, " \t\r\n\x00") {
+		return fmt.Errorf("provider: unusable clone URL %q", shown(raw))
+	}
+	if strings.Contains(raw, "::") {
+		return fmt.Errorf("provider: remote-helper URLs are not allowed: %q", shown(raw))
+	}
+	if strings.Contains(raw, "://") {
+		u, err := url.Parse(raw)
+		if err != nil || u.Hostname() == "" || (u.Scheme != "https" && u.Scheme != "ssh") {
+			return fmt.Errorf("provider: only https and ssh clone URLs are allowed, got %q", shown(raw))
+		}
+		return nil
+	}
+	// scp-like user@host:path
+	if at, colon := strings.Index(raw, "@"), strings.Index(raw, ":"); at > 0 && colon > at+1 && !strings.HasPrefix(raw, "/") {
+		return nil
+	}
+	return fmt.Errorf("provider: only https and ssh clone URLs are allowed, got %q", shown(raw))
+}
+
+// shown makes a URL safe to put in an error message: credentials removed, control characters dropped, length bounded.
+func shown(raw string) string {
+	if u, err := url.Parse(raw); err == nil && u.User != nil {
+		raw = u.Redacted()
+	} else if at := strings.LastIndex(raw, "@"); at > 0 && strings.Contains(raw[:at], ":") {
+		raw = "***@" + raw[at+1:] // scp-like or unparsable with a password-looking prefix
+	}
+	raw = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, raw)
+	if len(raw) > 80 {
+		raw = raw[:80] + "…"
+	}
+	return raw
 }

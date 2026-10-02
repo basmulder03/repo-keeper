@@ -18,8 +18,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with: { go-version-file: go.mod }
-      - run: go test -race -cover ./...
+      - run: go test -race -cover -coverprofile=coverage.out ./...
       - run: go build ./...
+      - name: Coverage floors (Linux leg only; Windows/macOS legs run the tests)
+        if: matrix.os == 'ubuntu-latest'
+        run: ./scripts/coverage-gate.sh coverage.out
   lint-security:
     runs-on: ubuntu-latest
     steps:

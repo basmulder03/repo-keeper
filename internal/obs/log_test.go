@@ -68,3 +68,23 @@ func TestWriter_ReportsOriginalLength(t *testing.T) {
 		t.Fatalf("n=%d err=%v", n, err)
 	}
 }
+
+func FuzzScrub_RegisteredSecretNeverSurvives(f *testing.F) {
+	for _, s := range []string{"token=hunter2-hunter2", "hunter2-hunter2hunter2-hunter2", "x hunter2-hunter2", "ghp_0123456789abcdefghij", ""} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, in string) {
+		var r Redactor
+		const secret = "hunter2-hunter2"
+		r.Add(secret)
+		out := r.Scrub(in)
+		if strings.Contains(in, secret) && strings.Contains(out, secret) {
+			t.Fatalf("secret survived: %q -> %q", in, out)
+		}
+		var buf bytes.Buffer
+		n, err := r.Writer(&buf).Write([]byte(in))
+		if err != nil || n != len(in) {
+			t.Fatalf("writer contract broken: n=%d len=%d err=%v", n, len(in), err)
+		}
+	})
+}

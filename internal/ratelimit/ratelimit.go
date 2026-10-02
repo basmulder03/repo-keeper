@@ -236,6 +236,9 @@ func (l *Limiter) observe(h *host, r Response) {
 func (h *host) exhausted() bool { return h.limit > 0 && h.remaining <= 0 && !h.reset.IsZero() }
 
 func (l *Limiter) setCooldown(h *host, until time.Time, why string) {
+	if limit := l.clk.Now().Add(maxCooldown); until.After(limit) {
+		until = limit
+	}
 	if until.After(h.cooldown) {
 		h.cooldown, h.cooldownBy = until, why
 	}
@@ -290,6 +293,9 @@ func (l *Limiter) readQuota(h *host, hdr http.Header, now time.Time) {
 		}
 	}
 }
+
+// maxCooldown caps any server-supplied wait: a hostile or buggy "Retry-After: 99999999" must not park a host forever.
+const maxCooldown = 24 * time.Hour
 
 // Quota is a host's last known budget.
 type Quota struct {

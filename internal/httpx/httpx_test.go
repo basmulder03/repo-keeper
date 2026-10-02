@@ -3,9 +3,12 @@
 package httpx
 
 import (
+	"encoding/pem"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -212,5 +215,54 @@ func TestDo_ETagCache_IsolatedPerCredential(t *testing.T) {
 	}
 	if !do("alice").FromCache {
 		t.Fatal("alice's own cache should still work")
+	}
+}
+
+func TestLoadCAFile(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("hi")) }))
+	defer srv.Close()
+	dir := t.TempDir()
+	good := filepath.Join(dir, "ca.pem")
+	_ = os.WriteFile(good, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw}), 0o600)
+	pool, err := LoadCAFile(good)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := get(t, newClient(t, func(c *Config) { c.RootCAs = pool }), srv.URL); err != nil {
+		t.Fatalf("private CA must be trusted once configured: %v", err)
+	}
+	if _, err := get(t, newClient(t, nil), srv.URL); err == nil {
+		t.Fatal("without the CA the server must still be refused")
+	}
+	junk := filepath.Join(dir, "junk.pem")
+	_ = os.WriteFile(junk, []byte("not a certificate"), 0o600)
+	for _, bad := range []string{junk, filepath.Join(dir, "missing.pem")} {
+		if _, err := LoadCAFile(bad); err == nil {
+			t.Errorf("%s must be rejected", bad)
+		}
+	}
+}
+
+func TestDo_CertificateError_FailsFast_NotRetried_NoHostPenalty(t *testing.T) {
+	var hits int32
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { atomic.AddInt32(&hits, 1) }))
+	defer srv.Close()
+	lim := ratelimit.New(ratelimit.Config{Rate: 1000, Burst: 100, BackoffBase: time.Hour}, clock.Real{}, nil)
+	c := newClient(t, func(cfg *Config) { cfg.Limiter = lim })
+	for i := 0; i < 3; i++ { // would block on a one-hour backoff after the first call if it counted as a host failure
+		start := time.Now()
+		_, err := get(t, c, srv.URL)
+		if err == nil || !strings.Contains(err.Error(), "ca_file") {
+			t.Fatalf("call %d: err=%v", i, err)
+		}
+		if time.Since(start) > 2*time.Second {
+			t.Fatalf("call %d took %v", i, time.Since(start))
+		}
+	}
+	if hits != 0 {
+		t.Fatalf("server was reached %d times despite failed verification", hits)
+	}
+	if st := lim.Snapshot(); len(st) != 1 || st[0].Failures != 0 || !st[0].Cooldown.IsZero() {
+		t.Fatalf("a certificate error must not penalise the host: %+v", st)
 	}
 }

@@ -274,3 +274,28 @@ func TestLock_StaleLockIsBroken(t *testing.T) {
 	}
 	unlock()
 }
+
+func TestCheckSafeConfig_StandardLFSAccepted_ImpostorsRejected(t *testing.T) {
+	e := gitxtest.New(t)
+	for k, v := range map[string]string{
+		"filter.lfs.clean": "git-lfs clean -- %f", "filter.lfs.smudge": "git-lfs smudge -- %f",
+		"filter.lfs.process": "git-lfs filter-process", "filter.lfs.required": "true",
+	} {
+		e.Git(e.Work, "config", "--local", k, v)
+	}
+	if err := e.Repo(e.Work).CheckSafeConfig(t.Context()); err != nil {
+		t.Fatalf("a repo set up with `git lfs install --local` must be accepted: %v", err)
+	}
+	for _, bad := range []struct{ k, v string }{
+		{"filter.lfs.smudge", "git-lfs smudge -- %f; touch /tmp/x"},
+		{"filter.lfs.process", "sh -c evil"},
+		{"filter.evil.smudge", "git-lfs smudge -- %f"}, // right command, wrong filter name
+		{"filter.lfs.clean", "/tmp/git-lfs clean -- %f"},
+	} {
+		e2 := gitxtest.New(t)
+		e2.Git(e2.Work, "config", "--local", bad.k, bad.v)
+		if err := e2.Repo(e2.Work).CheckSafeConfig(t.Context()); !errors.Is(err, gitx.ErrUnsafeConfig) {
+			t.Errorf("%s=%q must be rejected (err=%v)", bad.k, bad.v, err)
+		}
+	}
+}

@@ -13,7 +13,7 @@ Ordering, not promises (one part-time maintainer). **Linux/NixOS first; GitHub f
 | **M4** ✅ done: Provider extensibility proof | Second provider (GitLab, nested groups) added **without touching core** | Shared contract suite passes; layout supports N-level namespaces |
 | **M5** ✅ done: Packaging (Linux) | Nix flake + Home-Manager module, systemd user unit, `.deb`/`.rpm`, container, GoReleaser, cosign, SBOM | Signed Linux releases; reproducible build check |
 | **M6** Remaining providers | Azure DevOps (org/project), Bitbucket Cloud, Gitea/Forgejo, generic | Contract suite + compliance checklist per provider |
-| **M7** Hardening & 0.x beta | Fuzzing, perf (NFR-1), hostile-repo suite, self-audit | 4 weeks dogfooding without data-loss bugs |
+| **M7** ✅ done (beta soak pending): Hardening & 0.x beta | Fuzzing, perf (NFR-1), hostile-repo suite, self-audit | 4 weeks dogfooding without data-loss bugs |
 | **1.0** | Stable config/CLI | Docs complete |
 | **Later** | macOS (launchd, notarization), Windows (Task Scheduler, Authenticode/SignPath), Windows/macOS tray, Bitbucket DC | Tackled when a release for that OS is wanted |
 

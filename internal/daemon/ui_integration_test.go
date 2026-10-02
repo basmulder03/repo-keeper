@@ -40,7 +40,7 @@ func startWithUI(t *testing.T, e *gitxtest.Env, cfg string) (*rig, *browserSessi
 	writeCfg(t, r.cfgPath, cfg)
 	runtimeDir := filepath.Join(dir, "run")
 	r.d = &Daemon{ConfigPath: r.cfgPath, StateDir: filepath.Join(dir, "state"), Runner: e.R, Clock: r.clk, Tick: time.Minute,
-		EphemeralUI: true, RuntimeDir: runtimeDir, Version: "test"}
+		EphemeralUI: true, RuntimeDir: runtimeDir, Version: "test", AllowLocalCloneURLs: true}
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
 	go func() { r.done <- r.d.Run(ctx) }()

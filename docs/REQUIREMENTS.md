@@ -15,8 +15,8 @@ Priority: **M** must (v1.0), **S** should, **C** could (post-1.0). Each requirem
 | FR-A1 | M | Multiple accounts per provider; each account = provider kind + base URL + credential ref. |
 | FR-A2 | M | Credential types: PAT/API token, OAuth device flow (where supported), SSH key via ssh-agent. |
 | FR-A3 | S | GitHub App installation tokens; Azure DevOps Entra ID (OAuth); GitLab OAuth refresh. |
-| FR-A4 | M | Secrets live in the OS keychain, or are read from a mode-600 `token_file` / an environment variable (agenix, sops-nix, systemd credentials, containers). A passphrase-encrypted file store for headless hosts without any of these is planned for hardening (M7). |
-| FR-A5 | M | Self-hosted instances (GitHub Enterprise Server, GitLab self-managed, Gitea/Forgejo, Bitbucket DC) via base URL + custom CA. |
+| FR-A4 | M | Secrets live in the OS keychain, or in a passphrase-encrypted file (`general.secrets = "file"`, PBKDF2-SHA256 600 000 rounds + AES-256-GCM, passphrase from a mode-600 file named by `REPO_KEEPER_PASSPHRASE_FILE`), or are read from a mode-600 `token_file` / an environment variable (agenix, sops-nix, systemd credentials, containers). |
+| FR-A5 | M | Self-hosted instances (GitHub Enterprise Server, GitLab self-managed; Gitea/Forgejo and Bitbucket DC planned) via `base_url` and, for private CAs, `ca_file` (git is pointed at the same bundle). |
 | FR-A6 | M | Credential health check: detect expired/revoked/under-scoped token and surface in UI; stop retrying until fixed. |
 
 ### Discovery
