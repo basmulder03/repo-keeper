@@ -143,3 +143,23 @@ func (c *Client) LoginURL(ctx context.Context) (string, error) {
 	}
 	return out.URL, nil
 }
+
+// Runtime returns the daemon's runtime file (address, control token), or ErrNotRunning.
+func (c *Client) Runtime() (control.RuntimeFile, error) { return c.runtime() }
+
+// Shutdown asks the daemon to stop, or to re-execute itself when restart is set.
+func (c *Client) Shutdown(ctx context.Context, restart bool) error {
+	path := "/api/shutdown"
+	if restart {
+		path = "/api/restart"
+	}
+	resp, err := c.do(ctx, http.MethodPost, path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusAccepted {
+		return fmt.Errorf("tray: daemon answered HTTP %d", resp.StatusCode)
+	}
+	return nil
+}

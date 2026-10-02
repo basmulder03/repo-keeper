@@ -30,7 +30,7 @@ func main() {
 	if os.Getenv(askpass.EnvMarker) == "1" { // git is asking for credentials: act as the helper
 		os.Exit(askpass.Run(os.Args[1:], os.Getenv, os.Stdout))
 	}
-	a := &app{out: os.Stdout, err: os.Stderr, in: os.Stdin, secrets: secrets.Keyring{}, newRunner: gitx.New, clock: clock.Real{}, openBrowser: browser.Open}
+	a := &app{out: os.Stdout, err: os.Stderr, in: os.Stdin, secrets: secrets.Keyring{}, newRunner: gitx.New, clock: clock.Real{}, openBrowser: browser.Open, reexec: reexecSelf}
 	os.Exit(a.run(ctx, os.Args[1:]))
 }
 
@@ -52,6 +52,12 @@ func (a *app) run(ctx context.Context, args []string) int {
 		return a.cmdAudit(ctx, rest)
 	case "daemon":
 		return a.cmdDaemon(ctx, rest)
+	case "start":
+		return a.cmdStart(ctx, rest)
+	case "stop":
+		return a.cmdStop(ctx, rest)
+	case "restart":
+		return a.cmdRestart(ctx, rest)
 	case "status":
 		return a.cmdStatus(ctx, rest)
 	case "init":
@@ -86,6 +92,7 @@ Commands:
   init                    write a starter configuration file
   config validate         check the configuration file
   daemon                  run the background service (scheduled syncs)
+  start | stop | restart  run the daemon detached in the background (no service manager needed)
   status                  show tracked repositories and their last sync
   ui                      open the web interface (signs in with a one-time link)
   accounts add|list|check|rm manage platform logins (tokens live in the OS keychain)

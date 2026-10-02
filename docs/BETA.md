@@ -25,6 +25,8 @@ nix profile install path:/home/you/Development/github/you/repo-keeper
 # or as a Home Manager service: see docs/INSTALL.md (use the same path: URL as the flake input)
 ```
 
+**Running it:** `repo-keeper start` runs the daemon detached in the background (log: `~/.local/state/repo-keeper/daemon.log`), `repo-keeper stop` stops it, `repo-keeper restart` restarts it in place. For an always-on setup that survives reboots use the systemd or Home Manager service instead.
+
 **Debian / Fedora / tarball:** see [INSTALL.md](INSTALL.md). Verify `checksums.txt` with `sha256sum --check` (signing starts with the first published release).
 
 Check: `repo-keeper version` prints `0.1.0-beta.1`, and `repo-keeper doctor` is all `ok`.
@@ -44,7 +46,7 @@ No keychain? Use `--token-file /path/to/token` (mode 600) or set `[general] secr
 
 ## 3. Phase two: sync one small thing
 
-Pick a narrow `include` (one org or a handful of repos), start the daemon (`repo-keeper daemon`, or the service) and open the UI with `repo-keeper ui`.
+Pick a narrow `include` (one org or a handful of repos), start the daemon (`repo-keeper start` for a detached background process, `repo-keeper daemon` in the foreground, or the service) and open the UI with `repo-keeper ui`.
 
 Things to verify:
 - [ ] repositories appear under `<root>/github/<owner>/<repo>` (GitLab: nested groups keep their depth)

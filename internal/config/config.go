@@ -32,6 +32,8 @@ const maxConfigBytes = 1 << 20
 // MinDiscoveryInterval keeps repository listing (many API calls) politely infrequent.
 const MinDiscoveryInterval = time.Hour
 
+var clientIDRe = regexp.MustCompile(`^[A-Za-z0-9._-]{4,64}$`)
+
 var accountName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 
 func isLoopback(h string) bool { ip := net.ParseIP(h); return ip != nil && ip.IsLoopback() }
@@ -50,70 +52,72 @@ func (d *Duration) UnmarshalText(b []byte) error {
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (d Duration) MarshalText() ([]byte, error) { return []byte(time.Duration(d).String()), nil }
+func (d Duration) MarshalText() ([]byte, error) { return []byte(FormatDuration(time.Duration(d))), nil }
 
 // Config is the whole file.
 type Config struct {
-	General  General   `toml:"general"`
-	Cleanup  Cleanup   `toml:"cleanup"`
-	Repos    []Repo    `toml:"repo"`
-	Accounts []Account `toml:"account"`
-	UI       UI        `toml:"ui"`
+	General  General   `toml:"general,omitempty"`
+	Cleanup  Cleanup   `toml:"cleanup,omitempty"`
+	Repos    []Repo    `toml:"repo,omitempty"`
+	Accounts []Account `toml:"account,omitempty"`
+	UI       UI        `toml:"ui,omitempty"`
 }
 
 // General holds scheduling behaviour.
 type General struct {
-	Interval    Duration `toml:"interval"`     // between syncs of one repo (default 30m, min 5m)
-	Concurrency int      `toml:"concurrency"`  // parallel repo syncs (default 4)
-	PerHost     int      `toml:"per_host"`     // parallel operations per remote host (default 2)
-	QuietHours  string   `toml:"quiet_hours"`  // "23:00-07:00" local time; no scheduled syncs inside
-	AllBranches *bool    `toml:"all_branches"` // fetch all branches (default true)
-	Secrets     string   `toml:"secrets"`      // keyring (default) | file (passphrase-encrypted; headless hosts)
-	SecretsFile string   `toml:"secrets_file"` // default <state dir>/secrets.enc
-	Root        string   `toml:"root"`         // clone root for account-discovered repos (absolute)
+	Interval    Duration `toml:"interval,omitempty"`     // between syncs of one repo (default 30m, min 5m)
+	Concurrency int      `toml:"concurrency,omitempty"`  // parallel repo syncs (default 4)
+	PerHost     int      `toml:"per_host,omitempty"`     // parallel operations per remote host (default 2)
+	QuietHours  string   `toml:"quiet_hours,omitempty"`  // "23:00-07:00" local time; no scheduled syncs inside
+	AllBranches *bool    `toml:"all_branches,omitempty"` // fetch all branches (default true)
+	Secrets     string   `toml:"secrets,omitempty"`      // keyring (default) | file (passphrase-encrypted; headless hosts)
+	SecretsFile string   `toml:"secrets_file,omitempty"` // default <state dir>/secrets.enc
+	Root        string   `toml:"root,omitempty"`         // clone root for account-discovered repos (absolute)
 }
 
 // Cleanup is the global branch-cleanup policy.
 type Cleanup struct {
-	Mode             string   `toml:"mode"` // off | dry-run | auto
-	MinAge           Duration `toml:"min_age"`
-	Protected        []string `toml:"protected"`
-	AllowNeverPushed bool     `toml:"allow_never_pushed"`
+	Mode             string   `toml:"mode,omitempty"` // off | dry-run | auto
+	MinAge           Duration `toml:"min_age,omitempty"`
+	Protected        []string `toml:"protected,omitempty"`
+	AllowNeverPushed bool     `toml:"allow_never_pushed,omitempty"`
 }
 
 // UI configures the local web interface.
 type UI struct {
-	Enabled *bool `toml:"enabled"` // default true
-	Port    int   `toml:"port"`    // preferred loopback port (default 7878; a free port is used if taken)
+	Enabled *bool `toml:"enabled,omitempty"` // default true
+	Port    int   `toml:"port,omitempty"`    // preferred loopback port (default 7878; a free port is used if taken)
 }
 
 // Account is a platform login whose repositories are discovered and cloned automatically.
 type Account struct {
-	Name     string `toml:"name"`
-	Provider string `toml:"provider"` // github | gitlab
-	BaseURL  string `toml:"base_url"` // API base: GHES https://ghe.example.com/api/v3, GitLab https://gitlab.example.com; default is the public cloud
-	CAFile   string `toml:"ca_file"`  // PEM bundle with the private CA of a self-hosted instance (absolute path)
+	Name     string `toml:"name,omitempty"`
+	Provider string `toml:"provider,omitempty"` // github | gitlab
+	BaseURL  string `toml:"base_url,omitempty"` // API base: GHES https://ghe.example.com/api/v3, GitLab https://gitlab.example.com; default is the public cloud
+	CAFile   string `toml:"ca_file,omitempty"`  // PEM bundle with the private CA of a self-hosted instance (absolute path)
 	// Credential source; with neither set the OS keychain entry "account/<name>" is used.
-	TokenEnv          string   `toml:"token_env"`
-	TokenFile         string   `toml:"token_file"`
-	Include           []string `toml:"include"` // globs on owner/name; empty = everything
-	Exclude           []string `toml:"exclude"`
-	SkipArchived      *bool    `toml:"skip_archived"` // default true
-	SkipForks         bool     `toml:"skip_forks"`
-	CloneProtocol     string   `toml:"clone_protocol"`     // https (default) | ssh
-	PartialClone      bool     `toml:"partial_clone"`      // blobless clones
-	DiscoveryInterval Duration `toml:"discovery_interval"` // default 6h, min 1h
-	Interval          Duration `toml:"interval"`           // per-repo sync interval override
-	CleanupMode       string   `toml:"cleanup"`            // overrides [cleanup].mode
+	TokenEnv          string   `toml:"token_env,omitempty"`
+	TokenFile         string   `toml:"token_file,omitempty"`
+	Include           []string `toml:"include,omitempty"` // globs on owner/name; empty = everything
+	Exclude           []string `toml:"exclude,omitempty"`
+	SkipArchived      *bool    `toml:"skip_archived,omitempty"` // default true
+	SkipForks         bool     `toml:"skip_forks,omitempty"`
+	CloneProtocol     string   `toml:"clone_protocol,omitempty"`     // https (default) | ssh
+	PartialClone      bool     `toml:"partial_clone,omitempty"`      // blobless clones
+	DiscoveryInterval Duration `toml:"discovery_interval,omitempty"` // default 6h, min 1h
+	Interval          Duration `toml:"interval,omitempty"`           // per-repo sync interval override
+	CleanupMode       string   `toml:"cleanup,omitempty"`            // overrides [cleanup].mode
+	OAuthClientID     string   `toml:"oauth_client_id,omitempty"`    // GitHub device flow: client id of your OAuth/GitHub App (no secret needed)
+	OAuthWebURL       string   `toml:"oauth_web_url,omitempty"`      // GitHub Enterprise Server web root for the device flow, e.g. https://ghe.example.com
 }
 
 // Repo is one tracked clone (provider discovery adds more in M3).
 type Repo struct {
-	Path        string   `toml:"path"`
-	Remote      string   `toml:"remote"`
-	Interval    Duration `toml:"interval"`
-	AllBranches *bool    `toml:"all_branches"`
-	CleanupMode string   `toml:"cleanup"` // overrides [cleanup].mode for this repo
+	Path        string   `toml:"path,omitempty"`
+	Remote      string   `toml:"remote,omitempty"`
+	Interval    Duration `toml:"interval,omitempty"`
+	AllBranches *bool    `toml:"all_branches,omitempty"`
+	CleanupMode string   `toml:"cleanup,omitempty"` // overrides [cleanup].mode for this repo
 }
 
 // Default returns the built-in configuration.
@@ -215,6 +219,14 @@ func (c Config) Validate() error {
 		}
 		if a.TokenEnv != "" && a.TokenFile != "" {
 			bad("account[%d]: set only one of token_env and token_file", i)
+		}
+		if a.OAuthClientID != "" && (a.Provider != "github" || !clientIDRe.MatchString(a.OAuthClientID)) {
+			bad("account[%d].oauth_client_id is only for github accounts and must be 4-64 letters, digits, dots, dashes or underscores", i)
+		}
+		if a.OAuthWebURL != "" {
+			if u, err := url.Parse(a.OAuthWebURL); err != nil || u.Host == "" || (u.Scheme != "https" && (u.Scheme != "http" || !isLoopback(u.Hostname()))) {
+				bad("account[%d].oauth_web_url must be https://...", i)
+			}
 		}
 		if a.CAFile != "" && !filepath.IsAbs(a.CAFile) {
 			bad("account[%d].ca_file must be an absolute path", i)

@@ -51,6 +51,8 @@ type Backend interface {
 	Trash(ctx context.Context, id int64) ([]gitx.TrashRef, error)
 
 	Status(ctx context.Context) (Status, error)
+	// Shutdown stops the daemon gracefully; with restart it re-executes itself afterwards (same PID, so a supervisor is undisturbed).
+	Shutdown(restart bool)
 	SyncAll(ctx context.Context) error
 	SetPaused(paused bool)
 	SyncNow(ctx context.Context, id int64) error

@@ -2,6 +2,18 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
+## 0.1.0-beta.2
+
+### Fixed
+- **Every form in the web UI was refused with "cross-origin request refused"** (config save, Sync now, Restore, ...): browsers send `Origin: null` on form posts under a no-referrer policy, which the origin check rejected. The check now trusts the browser's `Sec-Fetch-Site` header and the policy is `same-origin`. (CSRF tokens were always required in addition.)
+- A race when two processes opened a brand-new database at once (daemon + `status`) could fail with "table already exists" or `SQLITE_BUSY`.
+- Flaky account-status tests: the explaining event is now written before the new status is published.
+
+### Added
+- **Run the daemon detached, no service manager needed:** `repo-keeper start`, `stop` and `restart` (restart re-executes in place, same PID, so it also works under systemd). Logs go to `<state dir>/daemon.log` (private, size-capped).
+- **Daemon controls in the UI** (Debug page): restart and stop.
+- Config editing groundwork: a comment-preserving TOML block editor (used by the upcoming account and settings forms).
+
 ## 0.1.0-beta.1 (first beta)
 
 First version meant for real-world testing. **Linux only.** GitHub and GitLab only. Read [docs/BETA.md](docs/BETA.md) before pointing it at accounts you care about.

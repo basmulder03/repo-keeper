@@ -145,6 +145,13 @@ func (a *app) cmdDaemon(ctx context.Context, args []string) int {
 		_, _ = fmt.Fprintln(a.err, "repo-keeper:", err)
 		return 1
 	}
+	if d.RestartRequested() {
+		_, _ = fmt.Fprintln(a.err, "restarting")
+		if err := a.reexec(); err != nil {
+			_, _ = fmt.Fprintln(a.err, "repo-keeper: restart failed:", err)
+			return 1
+		}
+	}
 	return 0
 }
 

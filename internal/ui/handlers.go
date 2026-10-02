@@ -503,3 +503,22 @@ func (s *Server) handleAPIPause(w http.ResponseWriter, _ *http.Request, paused b
 	s.Backend.SetPaused(paused)
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (s *Server) handleAPIShutdown(w http.ResponseWriter, _ *http.Request, restart bool) {
+	s.Backend.Shutdown(restart)
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// handleDaemonAction restarts or stops the daemon from the UI. Sessions are in memory, so after either the user
+// signs in again with `repo-keeper ui`; the page says so instead of leaving a dead UI unexplained.
+func (s *Server) handleDaemonAction(w http.ResponseWriter, r *http.Request, _ sessionInfo, restart bool) {
+	msg := "The daemon is stopping. Start it again with `repo-keeper start` (or your service manager)."
+	title := "Stopping"
+	if restart {
+		title = "Restarting"
+		msg = "The daemon is restarting. Run `repo-keeper ui` in a few seconds to sign in again (sessions do not survive a restart)."
+	}
+	s.Backend.Shutdown(restart)
+	w.WriteHeader(http.StatusAccepted)
+	s.renderTo(w, "error", page{Title: title, Message: msg, Anon: true})
+}

@@ -108,6 +108,13 @@ func (f *fake) Status(context.Context) (Status, error) {
 	return Status{Version: "1.2.3", Repos: 3, UpToDate: 1, NeedAttention: 1, Pending: 1, Accounts: 1, AccountsAttention: 1}, nil
 }
 func (f *fake) SyncAll(context.Context) error { f.rec("sync-all"); return nil }
+func (f *fake) Shutdown(restart bool) {
+	if restart {
+		f.rec("restart")
+	} else {
+		f.rec("shutdown")
+	}
+}
 func (f *fake) SetPaused(p bool) {
 	if p {
 		f.rec("pause")
@@ -360,7 +367,7 @@ func TestSecurityHeaders_OnEveryResponse(t *testing.T) {
 		if strings.Contains(csp, "unsafe-inline") || strings.Contains(csp, "unsafe-eval") || strings.Contains(csp, "http") {
 			t.Errorf("%s: CSP too lax: %s", p, csp)
 		}
-		if h.Get("X-Content-Type-Options") != "nosniff" || h.Get("Referrer-Policy") != "no-referrer" || h.Get("X-Frame-Options") != "DENY" {
+		if h.Get("X-Content-Type-Options") != "nosniff" || h.Get("Referrer-Policy") != "same-origin" || h.Get("X-Frame-Options") != "DENY" {
 			t.Errorf("%s: missing hardening headers: %v", p, h)
 		}
 		if h.Get("Access-Control-Allow-Origin") != "" {
@@ -405,7 +412,7 @@ func TestPages_RenderAndEscapeHostileData(t *testing.T) {
 		"/cleanup":             {[]string{"Cleanup review", "dry-run", "would-delete"}, true, false},
 		"/audit":               {[]string{"Audit journal", "deleted", "merged-into-default", "abcdef0123"}, true, false},
 		"/config":              {[]string{"Validate and save", "textarea"}, true, true},
-		"/debug":               {[]string{"git fetch --prune", "2.50.0", "Download diagnostics bundle"}, true, false},
+		"/debug":               {[]string{"git fetch --prune", "2.50.0", "Download diagnostics bundle", "Restart daemon", "Stop daemon", "/daemon/restart"}, true, true},
 		"/fragments/dashboard": {[]string{"Repositories", "Remote hosts"}, true, true},
 	}
 	for p, w := range pages {
@@ -717,4 +724,67 @@ func FuzzUI_HostileRequests_NeverPanicOrReachBackendUnauthenticated(f *testing.F
 			t.Fatalf("backend reached without a session: %v", e.b.calls)
 		}
 	})
+}
+
+// Real browsers send `Origin: null` on form POSTs when the page's Referrer-Policy is no-referrer (Fetch spec,
+// "serializing a request origin"), together with Sec-Fetch-Site: same-origin. That must be accepted.
+func TestCSRF_RealBrowserHeaders_FormPost_IsAccepted(t *testing.T) {
+	e := newEnv(t)
+	c, csrf := e.login()
+	form := url.Values{"csrf": {csrf}}
+	post := func(opts ...reqOpt) int {
+		return e.do(http.MethodPost, "/repos/1/sync", form, append([]reqOpt{cookie(c)}, opts...)...).Code
+	}
+	if got := post(hdr("Origin", "null"), hdr("Sec-Fetch-Site", "same-origin"), hdr("Sec-Fetch-Mode", "navigate")); got != http.StatusSeeOther {
+		t.Fatalf("Chrome/Firefox form POST (Origin: null, same-origin) => %d, want 303", got)
+	}
+	if got := post(hdr("Origin", "http://127.0.0.1:7878"), hdr("Sec-Fetch-Site", "same-origin")); got != http.StatusSeeOther {
+		t.Fatalf("explicit same origin => %d", got)
+	}
+	if got := post(hdr("Origin", "null"), hdr("Sec-Fetch-Site", "cross-site")); got != http.StatusForbidden {
+		t.Fatalf("a cross-site POST must still be refused even with Origin: null => %d", got)
+	}
+	if got := post(hdr("Origin", "null"), hdr("Sec-Fetch-Site", "same-site")); got != http.StatusForbidden {
+		t.Fatalf("same-site (other port/subdomain) is not same-origin => %d", got)
+	}
+	if got := post(hdr("Origin", "null")); got != http.StatusForbidden {
+		t.Fatalf("Origin: null without Sec-Fetch-Site (old browser or sandboxed iframe) must be refused => %d", got)
+	}
+	if got := post(); got != http.StatusSeeOther {
+		t.Fatalf("non-browser client without Origin headers keeps working (CSRF token still required) => %d", got)
+	}
+	if rp := e.do(http.MethodGet, "/", nil, cookie(c)).Header().Get("Referrer-Policy"); rp != "same-origin" {
+		t.Fatalf("Referrer-Policy=%q", rp)
+	}
+}
+
+func TestDaemonControl_UIAndMachineAPI(t *testing.T) {
+	e := newEnv(t)
+	c, csrf := e.login()
+	form := url.Values{"csrf": {csrf}}
+	if w := e.do(http.MethodPost, "/daemon/restart", form, cookie(c)); w.Code != http.StatusAccepted || !strings.Contains(w.Body.String(), "sign in again") || !e.b.called("restart") {
+		t.Fatalf("restart: %d %s", w.Code, w.Body)
+	}
+	if w := e.do(http.MethodPost, "/daemon/stop", form, cookie(c)); w.Code != http.StatusAccepted || !strings.Contains(w.Body.String(), "repo-keeper start") || !e.b.called("shutdown") {
+		t.Fatalf("stop: %d %s", w.Code, w.Body)
+	}
+	if w := e.do(http.MethodPost, "/daemon/stop", url.Values{}, cookie(c)); w.Code != http.StatusForbidden {
+		t.Fatalf("stop without CSRF token must be refused: %d", w.Code)
+	}
+	e2 := newEnv(t)
+	auth := hdr("Authorization", "Bearer "+e2.s.Control())
+	if w := e2.do(http.MethodPost, "/api/restart", nil, auth); w.Code != http.StatusAccepted || !e2.b.called("restart") {
+		t.Fatalf("api restart: %d", w.Code)
+	}
+	if w := e2.do(http.MethodPost, "/api/shutdown", nil, auth); w.Code != http.StatusAccepted || !e2.b.called("shutdown") {
+		t.Fatalf("api shutdown: %d", w.Code)
+	}
+	for _, p := range []string{"/api/shutdown", "/api/restart"} {
+		if w := e2.do(http.MethodPost, p, nil); w.Code != http.StatusUnauthorized {
+			t.Errorf("%s without the control token => %d", p, w.Code)
+		}
+	}
+	if w := e.do(http.MethodPost, "/api/shutdown", form, cookie(c)); w.Code != http.StatusUnauthorized {
+		t.Fatalf("a browser session must not unlock the machine API: %d", w.Code)
+	}
 }

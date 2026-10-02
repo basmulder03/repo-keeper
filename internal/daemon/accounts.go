@@ -137,15 +137,17 @@ func (d *Daemon) discover(ctx context.Context, l *liveConfig, a *accountRT) {
 	finish := func(status, errMsg string, next time.Time) {
 		st.Status, st.Error, st.NextDiscovery = status, errMsg, next
 		d.setNext(name, next)
-		if err := d.Store.SaveAccount(ctx, st); err != nil {
-			d.Log.Error("saving account state", "account", name, "err", err)
-		}
-		d.setAccountState(st)
+		// The event is written before the status is published: anything that sees the new status (the UI, tests,
+		// `status` output) can rely on the explaining event already being there.
 		if status != prev.Status && status != "ok" {
 			d.event(ctx, "error", 0, "account-"+status, name+": "+errMsg)
 		} else if status == "ok" && prev.Status != "" && prev.Status != "ok" {
 			d.event(ctx, "info", 0, "account-recovered", name)
 		}
+		if err := d.Store.SaveAccount(ctx, st); err != nil {
+			d.Log.Error("saving account state", "account", name, "err", err)
+		}
+		d.setAccountState(st)
 	}
 
 	prov, _, err := a.get()

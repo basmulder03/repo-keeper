@@ -113,20 +113,20 @@ func TestRun_DispatchesDueRepoThenReschedules(t *testing.T) {
 	defer r.start(t)()
 
 	r.wait(t, 1)
-	if !r.clk.BlockUntil(1, time.Second) {
-		t.Fatal("scheduler not idle")
-	}
+	r.settle(t)
 	repos, _ := r.s.ListRepos(t.Context())
 	if !repos[0].NextSync.Equal(t0.Add(time.Hour)) || repos[0].LastStatus != "ok" {
 		t.Fatalf("repo=%+v", repos[0])
 	}
 
 	r.clk.Advance(30 * time.Minute) // not due yet
+	r.sc.Wake()                     // abandoned fake timers make "a waiter exists" meaningless; dispatch explicitly against the new time
 	time.Sleep(50 * time.Millisecond)
 	if r.cnt.Load() != 1 {
 		t.Fatal("ran before due")
 	}
 	r.clk.Advance(31 * time.Minute)
+	r.sc.Wake() // abandoned fake timers make "a waiter exists" meaningless; dispatch explicitly against the new time
 	r.wait(t, 1)
 }
 
@@ -135,8 +135,9 @@ func TestRun_MissedWhileAsleep_RunsOnceNotMany(t *testing.T) {
 	_ = r.s.SyncRepos(t.Context(), []store.Spec{{Path: "/a", Remote: "o", Interval: time.Hour}}, func(int) time.Time { return t0 })
 	defer r.start(t)()
 	r.wait(t, 1)
-	r.clk.BlockUntil(1, time.Second)
+	r.settle(t)
 	r.clk.Advance(10 * time.Hour) // laptop slept through ten intervals
+	r.sc.Wake()                   // abandoned fake timers make "a waiter exists" meaningless; dispatch explicitly against the new time
 	r.wait(t, 1)
 	time.Sleep(50 * time.Millisecond)
 	if r.cnt.Load() != 2 {
@@ -197,7 +198,7 @@ func TestRun_RateLimitedJob_DefersWithoutRecordingRun(t *testing.T) {
 	_ = r.s.SyncRepos(t.Context(), []store.Spec{{Path: "/a", Remote: "o", Interval: time.Hour}}, func(int) time.Time { return t0 })
 	defer r.start(t)()
 	r.wait(t, 1)
-	r.clk.BlockUntil(1, time.Second)
+	r.settle(t)
 	repos, _ := r.s.ListRepos(t.Context())
 	runs, _ := r.s.RecentRuns(t.Context(), repos[0].ID, 5)
 	if len(runs) != 0 || repos[0].NextSync.Before(t0.Add(20*time.Minute)) || repos[0].Failures != 0 {
@@ -213,8 +214,9 @@ func TestRun_RepeatedFailures_RaiseAttentionEventOnce(t *testing.T) {
 	defer r.start(t)()
 	for i := 0; i < attentionAfter+2; i++ {
 		r.wait(t, 1)
-		r.clk.BlockUntil(1, time.Second)
+		r.settle(t)
 		r.clk.Advance(30 * time.Minute)
+		r.sc.Wake() // abandoned fake timers make "a waiter exists" meaningless; dispatch explicitly against the new time
 	}
 	repos, _ := r.s.ListRepos(t.Context())
 	if !repos[0].NeedsAttention || repos[0].Failures < attentionAfter {
@@ -273,12 +275,29 @@ func TestRun_Paused_StopsScheduledButNotManual_AndResumeWakes(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.wait(t, 1)
-	r.clk.BlockUntil(1, time.Second)
+	r.settle(t)
 	r.clk.Advance(2 * time.Hour)
+	r.sc.Wake() // abandoned fake timers make "a waiter exists" meaningless; dispatch explicitly against the new time
 	time.Sleep(50 * time.Millisecond)
 	if r.cnt.Load() != 1 {
 		t.Fatal("paused scheduler ran a scheduled sync")
 	}
 	r.sc.SetPaused(false) // resuming picks up the overdue repo without waiting for the next tick
 	r.wait(t, 1)
+}
+
+// settle waits until no job is in flight, i.e. its result is recorded. Waiting on
+// the clock alone is not enough: the next tick is registered while the job is still running.
+func (r *rig) settle(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		r.sc.mu.Lock()
+		n := len(r.sc.inflight)
+		r.sc.mu.Unlock()
+		if n == 0 {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
 }

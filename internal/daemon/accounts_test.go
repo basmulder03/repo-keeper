@@ -150,8 +150,7 @@ func TestDaemon_Discovery_FiltersClonesAndRecordsAccount(t *testing.T) {
 	other := e.Clone("t1")
 	want := e.Commit(other, "n.txt", "n", "n")
 	e.Git(other, "push", "-q", "origin", "main")
-	r.clk.BlockUntil(2, time.Second)
-	r.clk.Advance(45 * time.Minute)
+	r.advance(45 * time.Minute)
 	r.waitFor(t, "fast-forward of the clone", func() bool {
 		out, err := e.R.Run(context.Background(), dest, "rev-parse", "main")
 		return err == nil && strings.TrimSpace(out) == want
@@ -164,7 +163,8 @@ func TestDaemon_Discovery_MissingCredential(t *testing.T) {
 	defer srv.Close()
 	r := start(t, e, acctCfg(t.TempDir(), srv.URL, filepath.Join(t.TempDir(), "nope"), ""))
 	r.waitFor(t, "no-credential status", func() bool { return r.account(t).Status == "no-credential" })
-	if len(r.repos(t)) != 0 || !r.hasEvent("account-no-credential") {
+	r.waitFor(t, "explaining event", func() bool { return r.hasEvent("account-no-credential") })
+	if len(r.repos(t)) != 0 {
 		t.Fatal("must report and track nothing")
 	}
 }
@@ -176,14 +176,11 @@ func TestDaemon_Discovery_AuthFailure_FlaggedAndRetriedSlowly(t *testing.T) {
 	defer srv.Close()
 	r := start(t, e, acctCfg(t.TempDir(), srv.URL, tokenFile(t), ""))
 	r.waitFor(t, "auth-failed", func() bool { return r.account(t).Status == "auth-failed" })
-	if !r.hasEvent("account-auth-failed") {
-		t.Fatal("event missing")
-	}
+	r.waitFor(t, "explaining event", func() bool { return r.hasEvent("account-auth-failed") })
 	gh.mu.Lock()
 	before := gh.hits
 	gh.mu.Unlock()
-	r.clk.BlockUntil(3, time.Second)
-	r.clk.Advance(10 * time.Minute) // well inside the retry window: no new API calls
+	r.advance(10 * time.Minute) // well inside the retry window: no new API calls
 	time.Sleep(100 * time.Millisecond)
 	gh.mu.Lock()
 	after := gh.hits
@@ -202,8 +199,7 @@ func TestDaemon_Discovery_RepoDisappears_MarkedMissingLocalCloneKept(t *testing.
 	root := filepath.Join(t.TempDir(), "code")
 	r := start(t, e, acctCfg(root, srv.URL, tokenFile(t), `discovery_interval = "1h"`))
 	r.waitFor(t, "discovery", func() bool { return len(r.repos(t)) == 2 })
-	r.clk.BlockUntil(3, time.Second)
-	r.clk.Advance(10 * time.Second) // the second repo is staggered 2s after the first
+	r.advance(10 * time.Second) // the second repo is staggered 2s after the first
 	r.waitFor(t, "both cloned", func() bool {
 		n := 0
 		for _, x := range r.repos(t) {
@@ -215,8 +211,7 @@ func TestDaemon_Discovery_RepoDisappears_MarkedMissingLocalCloneKept(t *testing.
 	})
 
 	gh.set(ghRepo("acme/api", e.Origin, false))
-	r.clk.BlockUntil(3, time.Second)
-	r.clk.Advance(7 * time.Hour)
+	r.advance(7 * time.Hour)
 	r.waitFor(t, "gone repo deactivated", func() bool { return len(r.repos(t)) == 1 })
 	if _, err := os.Stat(filepath.Join(root, "github", "acme", "gone", "README.md")); err != nil {
 		t.Fatal("local clone of a repo that vanished upstream must never be deleted")
@@ -275,8 +270,7 @@ func TestDaemon_SquashMergedBranch_CleanedViaProviderPR(t *testing.T) {
 	gh.prs = fmt.Sprintf(`[{"merged_at":"2026-01-01T00:00:00Z","head":{"ref":"feat","sha":%q,"repo":{"full_name":"acme/api"}}}]`, tip)
 	gh.mu.Unlock()
 
-	r.clk.BlockUntil(3, time.Second)
-	r.clk.Advance(45 * time.Minute)
+	r.advance(45 * time.Minute)
 	r.waitFor(t, "feat deleted locally", func() bool {
 		_, err := e.R.Run(context.Background(), dest, "rev-parse", "--verify", "-q", "refs/heads/feat")
 		return err != nil
@@ -386,8 +380,7 @@ func TestDaemon_GitLab_NestedGroups_ClonedAndSquashCleanedViaMR(t *testing.T) {
 	gl.mrs = fmt.Sprintf(`[{"source_branch":"feat","sha":%q,"source_project_id":7,"target_project_id":7,"merged_at":"2026-01-01T00:00:00Z"}]`, tip)
 	gl.mu.Unlock()
 
-	r.clk.BlockUntil(3, time.Second)
-	r.clk.Advance(45 * time.Minute)
+	r.advance(45 * time.Minute)
 	r.waitFor(t, "feat deleted via merge request evidence", func() bool {
 		_, err := e.R.Run(context.Background(), dest, "rev-parse", "--verify", "-q", "refs/heads/feat")
 		return err != nil

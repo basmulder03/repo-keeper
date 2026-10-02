@@ -66,14 +66,16 @@ type Daemon struct {
 	// AllowLocalCloneURLs lifts the https/ssh-only rule for clone URLs; tests use local bare repos. Never set in production.
 	AllowLocalCloneURLs bool
 
-	live      atomic.Pointer[liveConfig]
-	ready     chan struct{}
-	readyOnce sync.Once
-	Store     *store.Store
-	Limiter   *ratelimit.Limiter
-	HTTP      *httpx.Client
-	Sched     *sched.Scheduler
-	journal   *audit.File
+	live       atomic.Pointer[liveConfig]
+	ready      chan struct{}
+	readyOnce  sync.Once
+	Store      *store.Store
+	Limiter    *ratelimit.Limiter
+	HTTP       *httpx.Client
+	Sched      *sched.Scheduler
+	journal    *audit.File
+	cancel     context.CancelFunc
+	restartReq atomic.Bool
 
 	runner     *gitx.Runner
 	cmds       cmdLog
@@ -131,6 +133,8 @@ func (d *Daemon) version() string {
 
 // Run starts the daemon and blocks until ctx is cancelled.
 func (d *Daemon) Run(ctx context.Context) error {
+	ctx, d.cancel = context.WithCancel(ctx) // lets the UI and the control API stop the daemon gracefully
+	defer d.cancel()
 	d.initReady()
 	if d.Clock == nil {
 		d.Clock = clock.Real{}

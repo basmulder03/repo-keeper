@@ -13,6 +13,13 @@
 <p><a class="btn" href="/debug/bundle.json" download>Download diagnostics bundle</a> <span class="muted">JSON with state, events, git command log and configuration. Secrets are never included.</span></p>
 </div>
 
+<h2>Daemon</h2>
+<div class="panel">
+<p class="muted">Some settings (concurrency, per-host limit, UI port) only apply after a restart. Restarting re-executes the daemon in place, so a service manager keeps supervising the same process.</p>
+<form class="inline" method="post" action="/daemon/restart" data-confirm="Restart the daemon? Running syncs are finished first and you will have to sign in to the UI again.">{{template "csrf" .}}<button type="submit">Restart daemon</button></form>
+<form class="inline" method="post" action="/daemon/stop" data-confirm="Stop the daemon? Nothing is synced until it is started again, and this interface goes away.">{{template "csrf" .}}<button class="danger" type="submit">Stop daemon</button></form>
+</div>
+
 <h2>Recent git commands</h2>
 <div class="panel">
 <table>

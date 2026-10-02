@@ -270,8 +270,7 @@ func TestUI_MachineAPI_StatusPauseSyncAll(t *testing.T) {
 	other := e.Clone("t1")
 	want := e.Commit(other, "n.txt", "n", "n")
 	e.Git(other, "push", "-q", "origin", "main")
-	r.clk.BlockUntil(3, time.Second)
-	r.clk.Advance(2 * time.Hour)
+	r.advance(2 * time.Hour)
 	time.Sleep(150 * time.Millisecond)
 	if e.Git(e.Work, "rev-parse", "main") == want {
 		t.Fatal("scheduled sync ran while paused")

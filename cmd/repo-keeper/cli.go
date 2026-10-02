@@ -30,6 +30,7 @@ type app struct {
 	newRunner   func() (*gitx.Runner, error)
 	clock       clock.Clock
 	openBrowser func(url string) error
+	reexec      func() error // replaces the process after a requested restart (stubbed in tests)
 }
 
 const trashRetention = 30 * 24 * time.Hour

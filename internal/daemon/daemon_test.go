@@ -163,8 +163,7 @@ func TestDaemon_SyncsRepoOnScheduleAndRecordsState(t *testing.T) {
 	other := e.Clone("t1")
 	want := e.Commit(other, "x.txt", "x", "x")
 	e.Git(other, "push", "-q", "origin", "main")
-	r.clk.BlockUntil(3, time.Second)
-	r.clk.Advance(45 * time.Minute)
+	r.advance(45 * time.Minute)
 	r.waitFor(t, "second sync", func() bool { rs := r.repos(t); return rs[0].LastSync.After(first) })
 	if got := e.Git(e.Work, "rev-parse", "main"); got != want {
 		t.Fatalf("main=%s want %s", got, want)
@@ -213,8 +212,7 @@ func TestDaemon_ConfigReload_AddsRepoAndRejectsInvalid(t *testing.T) {
 
 	// invalid change is rejected and reported, previous config stays
 	writeCfg(t, r.cfgPath, "[general]\ninterval = \"1m\"")
-	r.clk.BlockUntil(3, time.Second)
-	r.clk.Advance(31 * time.Second)
+	r.advance(31 * time.Second)
 	r.waitFor(t, "config-invalid event", func() bool {
 		ev, _ := r.d.Store.RecentEvents(context.Background(), 20)
 		for _, x := range ev {
@@ -230,11 +228,9 @@ func TestDaemon_ConfigReload_AddsRepoAndRejectsInvalid(t *testing.T) {
 
 	// valid change adds the second repo (mtime/size must differ)
 	writeCfg(t, r.cfgPath, cfgFor(e.Work, e2)+"# changed\n")
-	r.clk.BlockUntil(3, time.Second)
-	r.clk.Advance(31 * time.Second)
+	r.advance(31 * time.Second)
 	r.waitFor(t, "second repo tracked", func() bool { return len(r.repos(t)) == 2 })
-	r.clk.BlockUntil(3, time.Second)
-	r.clk.Advance(time.Minute)
+	r.advance(time.Minute)
 	r.waitFor(t, "second repo synced", func() bool {
 		for _, x := range r.repos(t) {
 			if x.Path == e2 && x.LastStatus == "ok" {
@@ -262,4 +258,17 @@ func FuzzHostOf_NeverPanics_AndNeverEmpty(f *testing.F) {
 			t.Fatalf("empty host for %q (must fall back to \"local\")", s)
 		}
 	})
+}
+
+// advance moves the fake clock and then nudges every loop explicitly. Waiting for "a timer is registered" is not
+// reliable with a fake clock (abandoned timers stay registered), so the loops are woken against the new time.
+func (r *rig) advance(d time.Duration) {
+	r.clk.Advance(d)
+	r.d.Sched.Wake()
+	for _, ch := range []chan struct{}{r.d.reloadWake, r.d.discWake} {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
 }

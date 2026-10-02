@@ -171,6 +171,8 @@ func (s *Server) routes() http.Handler {
 
 	mux.HandleFunc("GET /login", s.handleLogin)
 	mux.HandleFunc("GET /api/status", s.controlOnly(s.handleAPIStatus))
+	mux.HandleFunc("POST /api/shutdown", s.controlOnly(func(w http.ResponseWriter, r *http.Request) { s.handleAPIShutdown(w, r, false) }))
+	mux.HandleFunc("POST /api/restart", s.controlOnly(func(w http.ResponseWriter, r *http.Request) { s.handleAPIShutdown(w, r, true) }))
 	mux.HandleFunc("POST /api/sync-all", s.controlOnly(s.handleAPISyncAll))
 	mux.HandleFunc("POST /api/pause", s.controlOnly(func(w http.ResponseWriter, r *http.Request) { s.handleAPIPause(w, r, true) }))
 	mux.HandleFunc("POST /api/resume", s.controlOnly(func(w http.ResponseWriter, r *http.Request) { s.handleAPIPause(w, r, false) }))
@@ -191,6 +193,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /debug", s.authed(s.handleDebug))
 	mux.HandleFunc("GET /debug/bundle.json", s.authed(s.handleBundle))
 	mux.HandleFunc("POST /logout", s.authed(s.handleLogout))
+	mux.HandleFunc("POST /daemon/restart", s.authed(func(w http.ResponseWriter, r *http.Request, si sessionInfo) { s.handleDaemonAction(w, r, si, true) }))
+	mux.HandleFunc("POST /daemon/stop", s.authed(func(w http.ResponseWriter, r *http.Request, si sessionInfo) { s.handleDaemonAction(w, r, si, false) }))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { s.fail(w, r, http.StatusNotFound, "Not found") })
 	return s.guard(mux)
 }
@@ -202,7 +206,7 @@ func (s *Server) guard(next http.Handler) http.Handler {
 		h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
-		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Referrer-Policy", "same-origin") // never leaks the URL cross-origin; keeps Origin meaningful on same-origin POSTs
 		h.Set("Cross-Origin-Opener-Policy", "same-origin")
 		h.Set("Cross-Origin-Resource-Policy", "same-origin")
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
@@ -224,18 +228,23 @@ func (s *Server) guard(next http.Handler) http.Handler {
 	})
 }
 
-// sameOrigin requires Origin (when sent) to match our host and rejects explicit cross-site fetches.
+// sameOrigin decides whether a state-changing request came from our own pages. The CSRF token is the primary
+// defence; this is the second layer.
+//
+// Sec-Fetch-Site is set by the browser itself and cannot be forged by page script, so when present it is
+// authoritative: only "same-origin" (our pages) or "none" (user typed the URL) pass. Chrome and Firefox send
+// `Origin: null` on form POSTs under a no-referrer policy, so Origin cannot be used when Sec-Fetch-Site exists.
+// Without Sec-Fetch-Site (older browsers, non-browser clients) an Origin header, if any, must match exactly.
 func (s *Server) sameOrigin(r *http.Request) bool {
-	if o := r.Header.Get("Origin"); o != "" {
-		u, err := url.Parse(o)
-		if err != nil || u.Scheme != "http" || !s.hosts[strings.ToLower(u.Host)] {
-			return false
-		}
+	if sf := r.Header.Get("Sec-Fetch-Site"); sf != "" {
+		return sf == "same-origin" || sf == "none"
 	}
-	if sf := r.Header.Get("Sec-Fetch-Site"); sf != "" && sf != "same-origin" && sf != "none" {
-		return false
+	o := r.Header.Get("Origin")
+	if o == "" {
+		return true
 	}
-	return true
+	u, err := url.Parse(o)
+	return err == nil && u.Scheme == "http" && s.hosts[strings.ToLower(u.Host)]
 }
 
 type sessionInfo struct{ csrf, sid string }

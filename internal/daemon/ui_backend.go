@@ -416,3 +416,19 @@ func (b uiBackend) Bundle(ctx context.Context) ([]byte, error) {
 	}
 	return []byte(d.Redactor.Scrub(obs.Scrub(string(raw)))), nil
 }
+
+// Shutdown stops the daemon after the current request has been answered. With restart the process image is
+// replaced afterwards by the caller (see RestartRequested); nothing is cut short: Run drains running jobs first.
+func (b uiBackend) Shutdown(restart bool) {
+	if restart {
+		b.d.restartReq.Store(true)
+	}
+	time.AfterFunc(300*time.Millisecond, func() { // real time: the HTTP response must flush before the server stops
+		if b.d.cancel != nil {
+			b.d.cancel()
+		}
+	})
+}
+
+// RestartRequested reports whether the daemon stopped because a restart was asked for.
+func (d *Daemon) RestartRequested() bool { return d.restartReq.Load() }
