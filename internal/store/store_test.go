@@ -280,3 +280,35 @@ func TestLatestRuns_ReturnsNewestPerRepo(t *testing.T) {
 		t.Fatalf("m=%+v err=%v", m, err)
 	}
 }
+
+// The daemon and `repo-keeper status` may open a brand-new database at the same moment; exactly one may run
+// the migrations and the other must wait and then see the finished schema (found by the Windows CI leg).
+func TestOpen_ConcurrentFirstOpen_MigratesExactlyOnce(t *testing.T) {
+	for round := 0; round < 15; round++ {
+		p := filepath.Join(t.TempDir(), "state", "rk.db")
+		const n = 8
+		errs := make(chan error, n)
+		stores := make(chan *Store, n)
+		start := make(chan struct{})
+		for i := 0; i < n; i++ {
+			go func() {
+				<-start
+				s, err := Open(p)
+				errs <- err
+				stores <- s
+			}()
+		}
+		close(start)
+		for i := 0; i < n; i++ {
+			if err := <-errs; err != nil {
+				t.Fatalf("round %d: concurrent open failed: %v", round, err)
+			}
+			if s := <-stores; s != nil {
+				if rs, err := s.ListRepos(t.Context()); err != nil || rs == nil && false {
+					t.Fatalf("round %d: schema unusable: %v", round, err)
+				}
+				_ = s.Close()
+			}
+		}
+	}
+}

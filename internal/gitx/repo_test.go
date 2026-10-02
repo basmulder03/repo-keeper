@@ -123,7 +123,12 @@ func TestBranches_UpstreamGoneAndWorktrees(t *testing.T) {
 	wt := filepath.Join(e.Root, "wt")
 	e.Git(e.Work, "worktree", "add", "-q", wt, "feat")
 	w, _ := g.Worktrees(t.Context())
-	if w["main"] == "" || w["feat"] != wt {
+	same := func(a, b string) bool { // macOS reports /private/var/... for a /var/... temp dir
+		ra, err1 := filepath.EvalSymlinks(a)
+		rb, err2 := filepath.EvalSymlinks(b)
+		return err1 == nil && err2 == nil && ra == rb
+	}
+	if w["main"] == "" || !same(w["feat"], wt) {
 		t.Fatalf("worktrees=%v", w)
 	}
 }

@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version-file: go.mod }
+        with: { go-version-file: go.mod, check-latest: true }
       - name: Fuzz every target
         run: FUZZTIME="${{ inputs.fuzztime || '60s' }}" ./scripts/fuzz.sh
       - name: Keep crashers (commit them under testdata/fuzz to make them permanent regression tests)

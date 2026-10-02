@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite" // registers the "sqlite" driver
@@ -92,14 +93,21 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("store: %w", err)
 	}
 	dsn := "file:" + filepath.ToSlash(path) +
-		"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=synchronous(NORMAL)"
+		"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=synchronous(NORMAL)" // busy_timeout first: switching to WAL itself needs the lock
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("store: %w", err)
 	}
 	db.SetMaxOpenConns(1) // single writer; the workload is tiny and this removes SQLITE_BUSY races
 	s := &Store{db: db}
-	if err := s.migrate(context.Background()); err != nil {
+	// Several processes may open a brand-new database at once (daemon + `status`); SQLite can answer BUSY at once,
+	// without consulting the busy handler, so setup is retried briefly.
+	if err := retryBusy(func() error {
+		if err := db.PingContext(context.Background()); err != nil {
+			return err
+		}
+		return s.migrate(context.Background())
+	}); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -111,30 +119,41 @@ func Open(path string) (*Store, error) {
 func (s *Store) Close() error { return s.db.Close() }
 
 func (s *Store) migrate(ctx context.Context) error {
+	// One dedicated connection and BEGIN IMMEDIATE: the write lock is taken before the version is read, so two
+	// processes opening a fresh database serialise (the loser waits, then finds the schema already current).
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("store: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return fmt.Errorf("store: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(context.WithoutCancel(ctx), "ROLLBACK")
+		}
+	}()
 	var v int
-	if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
+	if err := conn.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
 		return fmt.Errorf("store: %w", err)
 	}
 	if v > len(migrations) {
 		return fmt.Errorf("store: database schema v%d is newer than this binary (v%d); upgrade repo-keeper", v, len(migrations))
 	}
 	for i := v; i < len(migrations); i++ {
-		tx, err := s.db.BeginTx(ctx, nil)
-		if err != nil {
-			return fmt.Errorf("store: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, migrations[i]); err != nil {
-			_ = tx.Rollback()
+		if _, err := conn.ExecContext(ctx, migrations[i]); err != nil {
 			return fmt.Errorf("store: migration %d: %w", i+1, err)
 		}
-		if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", i+1)); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("store: %w", err)
-		}
-		if err := tx.Commit(); err != nil {
+		if _, err := conn.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", i+1)); err != nil {
 			return fmt.Errorf("store: %w", err)
 		}
 	}
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return fmt.Errorf("store: %w", err)
+	}
+	committed = true
 	return nil
 }
 
@@ -509,4 +528,21 @@ func (s *Store) LatestRuns(ctx context.Context) (map[int64]Run, error) {
 		out[r.RepoID] = r
 	}
 	return out, rows.Err()
+}
+
+// retryBusy runs fn, retrying for up to ~10 s while SQLite reports the database as busy/locked.
+func retryBusy(fn func() error) error {
+	var err error
+	for attempt := 0; attempt < 100; attempt++ {
+		if err = fn(); err == nil || !isBusy(err) {
+			return err
+		}
+		time.Sleep(time.Duration(10+attempt*2) * time.Millisecond) //nolint:forbidigo // real-time backoff against another process
+	}
+	return err
+}
+
+func isBusy(err error) bool {
+	s := err.Error()
+	return strings.Contains(s, "SQLITE_BUSY") || strings.Contains(s, "database is locked") || strings.Contains(s, "SQLITE_LOCKED")
 }

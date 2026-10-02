@@ -126,7 +126,7 @@ func TestSource_Resolve_EnvFileStore(t *testing.T) {
 		{"unset env", Source{Env: "RK_TEST_UNSET"}, "", true},
 		{"missing file", Source{File: filepath.Join(dir, "nope")}, "", true},
 		{"empty file", Source{File: empty}, "", true},
-		{"loose perms", Source{File: loose}, "", runtime.GOOS != "windows"},
+		{"loose perms", Source{File: loose}, "x", runtime.GOOS != "windows"}, // Windows has no permission bits to check
 	} {
 		got, err := tc.src.Resolve(&s)
 		if (err != nil) != tc.fail || (!tc.fail && got.Reveal() != tc.want) {
