@@ -1,0 +1,12 @@
+{{define "content"}}
+<h1>Configuration</h1>
+<p class="muted">The file is validated before it is saved, the previous version is kept (last 10), and the daemon applies it without a restart. It never contains secrets. A changed UI port or concurrency needs a restart.</p>
+{{if .D.Errors}}<ul class="errors" role="alert">{{range .D.Errors}}<li>{{.}}</li>{{end}}</ul>{{end}}
+<form method="post" action="/config">
+  {{template "csrf" $}}
+  <input type="hidden" name="version" value="{{.D.Version}}">
+  <label for="text" class="muted">config.toml</label>
+  <textarea id="text" name="text" class="mono" spellcheck="false" autocomplete="off">{{.D.Text}}</textarea>
+  <p><button class="primary" type="submit">Validate and save</button></p>
+</form>
+{{end}}

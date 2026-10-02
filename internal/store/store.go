@@ -488,3 +488,25 @@ func (s *Store) ListAccounts(ctx context.Context) ([]Account, error) {
 	}
 	return out, rows.Err()
 }
+
+// LatestRuns returns the newest run of every repo that has one, keyed by repo id.
+func (s *Store) LatestRuns(ctx context.Context) (map[int64]Run, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, repo_id, started_ms, finished_ms, status, reason, ff, fetched, error, detail
+		FROM runs WHERE id IN (SELECT MAX(id) FROM runs GROUP BY repo_id)`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[int64]Run{}
+	for rows.Next() {
+		var r Run
+		var st, fin int64
+		var fetched int
+		if err := rows.Scan(&r.ID, &r.RepoID, &st, &fin, &r.Status, &r.Reason, &r.FF, &fetched, &r.Error, &r.Detail); err != nil {
+			return nil, err
+		}
+		r.Started, r.Finished, r.Fetched = fromMS(st), fromMS(fin), fetched == 1
+		out[r.RepoID] = r
+	}
+	return out, rows.Err()
+}

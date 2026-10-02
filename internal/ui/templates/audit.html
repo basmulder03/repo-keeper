@@ -1,0 +1,20 @@
+{{define "content"}}
+<h1>Audit journal</h1>
+<form class="toolbar" method="get" action="/audit">
+  <label for="q" class="muted">Filter</label>
+  <input id="q" name="q" type="search" value="{{.D.Q}}" placeholder="repo, branch, action…">
+  <label for="n" class="muted">Entries</label>
+  <select id="n" name="n">{{range $v := .D.Sizes}}<option value="{{$v}}"{{if eq $v $.D.N}} selected{{end}}>{{$v}}</option>{{end}}</select>
+  <button type="submit">Apply</button>
+</form>
+<div class="panel">
+<table>
+  <caption>Every local deletion, restore and blocked cleanup, newest first</caption>
+  <thead><tr><th scope="col">When</th><th scope="col">Action</th><th scope="col">Repository</th><th scope="col">Branch</th><th scope="col">Tip</th><th scope="col">Mode</th><th scope="col">Reason</th></tr></thead>
+  <tbody>
+  {{range .D.Entries}}<tr><td class="num">{{stamp .Time}}</td><td>{{.Action}}</td><td><code>{{.Repo}}</code></td><td><code>{{.Branch}}</code></td><td><code>{{short .SHA}}</code></td><td>{{.Mode}}</td><td>{{.Reason}}</td></tr>
+  {{else}}<tr><td colspan="7" class="muted">The journal is empty.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{end}}

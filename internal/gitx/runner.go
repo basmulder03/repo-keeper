@@ -55,6 +55,16 @@ func ParseVersion(s string) (Version, error) {
 	return Version{n(m[1]), n(m[2]), n(m[3])}, nil
 }
 
+// CommandRecord describes one finished git invocation.
+type CommandRecord struct {
+	Time     time.Time
+	Dir      string
+	Args     []string
+	Exit     int // 0 ok, -1 not started/cancelled
+	Duration time.Duration
+	Err      string
+}
+
 // Error is a failed git invocation; Stderr is scrubbed of token shapes.
 type Error struct {
 	Args     []string
@@ -75,6 +85,8 @@ type Runner struct {
 	Env []string
 	// Timeout bounds each invocation when the context has no deadline.
 	Timeout time.Duration
+	// Observe, when set, is called after every invocation (debug command log); arguments are scrubbed of token shapes.
+	Observe func(CommandRecord)
 }
 
 // New locates git on PATH and verifies the minimum version.
@@ -169,7 +181,12 @@ func (r *Runner) RunEnv(ctx context.Context, dir string, extra []string, args ..
 	cmd.Env = buildEnv(os.Environ(), append(append([]string{}, r.Env...), extra...))
 	var stdout, stderr limitedBuffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
+	start := time.Now()
+	err := cmd.Run()
+	if r.Observe != nil {
+		r.observe(dir, args, start, err, ctx)
+	}
+	if err != nil {
 		var ee *exec.ExitError
 		code := -1
 		if errors.As(err, &ee) {
@@ -200,4 +217,23 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 		return 0, errors.New("gitx: output limit exceeded")
 	}
 	return b.Buffer.Write(p)
+}
+
+func (r *Runner) observe(dir string, args []string, start time.Time, err error, ctx context.Context) {
+	rec := CommandRecord{Time: start, Dir: dir, Duration: time.Since(start)}
+	for _, a := range args {
+		rec.Args = append(rec.Args, obs.Scrub(a))
+	}
+	if err != nil {
+		rec.Exit = -1
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			rec.Exit = ee.ExitCode()
+		}
+		rec.Err = obs.Scrub(err.Error())
+		if ctx.Err() != nil {
+			rec.Err = ctx.Err().Error()
+		}
+	}
+	r.Observe(rec)
 }

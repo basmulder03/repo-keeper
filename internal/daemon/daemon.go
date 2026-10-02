@@ -47,6 +47,11 @@ type Daemon struct {
 	Log        *slog.Logger
 	// Tick overrides the scheduler poll interval (tests).
 	Tick time.Duration
+	// NoUI disables the web interface; EphemeralUI binds any free port instead of the configured one (tests).
+	NoUI        bool
+	EphemeralUI bool
+	// RuntimeDir receives ui.json (default: per-user runtime dir).
+	RuntimeDir string
 	// Version is reported in the User-Agent.
 	Version string
 	// Secrets resolves account tokens (default: OS keychain).
@@ -63,9 +68,16 @@ type Daemon struct {
 	Sched     *sched.Scheduler
 	journal   *audit.File
 
-	discMu   sync.Mutex
-	nextDisc map[string]time.Time
-	accounts map[string]store.Account
+	runner     *gitx.Runner
+	cmds       cmdLog
+	started    time.Time
+	gitVersion string
+	uiAddr     atomic.Value
+	reloadWake chan struct{}
+	discWake   chan struct{}
+	discMu     sync.Mutex
+	nextDisc   map[string]time.Time
+	accounts   map[string]store.Account
 }
 
 // liveConfig is an immutable snapshot swapped atomically on reload.
@@ -124,6 +136,14 @@ func (d *Daemon) Run(ctx context.Context) error {
 		d.Redactor = &obs.Redactor{}
 	}
 	d.nextDisc, d.accounts = map[string]time.Time{}, map[string]store.Account{}
+	d.reloadWake, d.discWake = make(chan struct{}, 1), make(chan struct{}, 1)
+	d.started = d.Clock.Now()
+	r := *d.Runner // private copy so only the daemon records commands
+	r.Observe = d.cmds.add
+	d.runner = &r
+	if v, err := r.Version(ctx); err == nil {
+		d.gitVersion = v.String()
+	}
 	dbPath, lockPath, journalPath := StatePaths(d.StateDir)
 
 	lock, err := instance.Acquire(lockPath)
@@ -168,6 +188,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		Quiet: func(t time.Time) bool { return d.live.Load().quiet.Contains(t) },
 	}
 	close(d.ready)
+	d.startUI(ctx, cfg)
 	d.Log.Info("daemon started", "repos", len(cfg.Repos), "accounts", len(cfg.Accounts), "config", d.ConfigPath, "state", d.StateDir)
 	go d.reloadLoop(ctx, cfg)
 	go d.discoveryLoop(ctx)
@@ -216,6 +237,7 @@ func (d *Daemon) reloadLoop(ctx context.Context, initial config.Config) {
 		case <-ctx.Done():
 			return
 		case <-d.Clock.After(reloadEvery):
+		case <-d.reloadWake:
 		}
 		st, err := os.Stat(d.ConfigPath)
 		if err != nil || stamp(st) == lastStamp {
@@ -314,7 +336,7 @@ func (d *Daemon) job(ctx context.Context, repo store.Repo) sched.Result {
 		return d.clone(ctx, repo, tg, tok, started)
 	}
 
-	g := d.Runner.Repo(repo.Path)
+	g := d.runner.Repo(repo.Path)
 	remoteURL, _ := g.RemoteURL(ctx, tg.set.Remote)
 	host := repo.Host
 	if h := hostOf(remoteURL); remoteURL != "" && h != host {
@@ -383,7 +405,7 @@ func (d *Daemon) clone(ctx context.Context, repo store.Repo, tg target, tok secr
 		}
 		return sched.Result{NoRecord: true, Kind: sched.Transient}
 	}
-	err = d.Runner.Clone(ctx, repo.CloneURL, repo.Path, credFor(repo.CloneURL, tok), tg.acct.set.PartialClone)
+	err = d.runner.Clone(ctx, repo.CloneURL, repo.Path, credFor(repo.CloneURL, tok), tg.acct.set.PartialClone)
 	res := syncer.Result{Status: syncer.OK}
 	if err != nil {
 		res = syncer.Result{Status: syncer.Failed, Reason: "clone", Err: err}
@@ -401,7 +423,7 @@ func (d *Daemon) clone(ctx context.Context, repo store.Repo, tg target, tok secr
 		return out
 	}
 	run.Reason = "cloned"
-	if def, _ := d.Runner.Repo(repo.Path).OriginHead(ctx, "origin"); def != "" {
+	if def, _ := d.runner.Repo(repo.Path).OriginHead(ctx, "origin"); def != "" {
 		run.DefaultBranch = def
 	}
 	d.event(ctx, "info", repo.ID, "cloned", repo.FullName)

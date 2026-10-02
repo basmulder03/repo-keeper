@@ -53,6 +53,7 @@ type Config struct {
 	Cleanup  Cleanup   `toml:"cleanup"`
 	Repos    []Repo    `toml:"repo"`
 	Accounts []Account `toml:"account"`
+	UI       UI        `toml:"ui"`
 }
 
 // General holds scheduling behaviour.
@@ -71,6 +72,12 @@ type Cleanup struct {
 	MinAge           Duration `toml:"min_age"`
 	Protected        []string `toml:"protected"`
 	AllowNeverPushed bool     `toml:"allow_never_pushed"`
+}
+
+// UI configures the local web interface.
+type UI struct {
+	Enabled *bool `toml:"enabled"` // default true
+	Port    int   `toml:"port"`    // preferred loopback port (default 7878; a free port is used if taken)
 }
 
 // Account is a platform login whose repositories are discovered and cloned automatically.
@@ -162,6 +169,9 @@ func (c Config) Validate() error {
 	}
 	if c.Cleanup.MinAge < 0 {
 		bad("cleanup.min_age must not be negative")
+	}
+	if c.UI.Port < 0 || c.UI.Port > 65535 {
+		bad("ui.port must be 0..65535")
 	}
 	if c.General.Root != "" && !filepath.IsAbs(c.General.Root) {
 		bad("general.root must be an absolute path")
@@ -365,4 +375,15 @@ func (c Config) ResolveAccount(a Account) AccountSettings {
 		s.Policy.Mode = cleanup.Mode(a.CleanupMode)
 	}
 	return s
+}
+
+// UIEnabled reports whether the web UI should start.
+func (c Config) UIEnabled() bool { return c.UI.Enabled == nil || *c.UI.Enabled }
+
+// UIPort returns the preferred UI port.
+func (c Config) UIPort() int {
+	if c.UI.Port == 0 {
+		return 7878
+	}
+	return c.UI.Port
 }

@@ -109,6 +109,7 @@ func (a *app) cmdDaemon(ctx context.Context, args []string) int {
 	fs.StringVar(&c.stateDir, "state-dir", "", "state directory (default: per-user state dir)")
 	level := fs.String("log-level", "info", "debug | info | warn | error")
 	jsonLog := fs.Bool("json", false, "JSON logs")
+	noUI := fs.Bool("no-ui", false, "do not start the web interface")
 	if fs.Parse(args) != nil {
 		return 2
 	}
@@ -129,7 +130,7 @@ func (a *app) cmdDaemon(ctx context.Context, args []string) int {
 	red := &obs.Redactor{}
 	d := &daemon.Daemon{
 		ConfigPath: c.configPath, StateDir: c.stateDir, Runner: runner, Clock: a.clock,
-		Version: version, Secrets: a.secrets, Redactor: red, Log: obs.New(a.err, lvl, *jsonLog, red),
+		NoUI: *noUI, Version: version, Secrets: a.secrets, Redactor: red, Log: obs.New(a.err, lvl, *jsonLog, red),
 	}
 	if err := d.Run(ctx); err != nil {
 		if errors.Is(err, instance.ErrRunning) {

@@ -47,3 +47,11 @@ func ConfigPath() (string, error) {
 	}
 	return filepath.Join(d, "repo-keeper", "config.toml"), nil
 }
+
+// RuntimeDir holds ephemeral per-session files (UI address); falls back to the state dir where the OS has none.
+func RuntimeDir() (string, error) {
+	if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" && filepath.IsAbs(d) {
+		return filepath.Join(d, "repo-keeper"), nil
+	}
+	return StateDir()
+}

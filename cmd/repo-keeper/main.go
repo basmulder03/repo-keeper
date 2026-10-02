@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/basmulder03/repo-keeper/internal/askpass"
+	"github.com/basmulder03/repo-keeper/internal/browser"
 	"github.com/basmulder03/repo-keeper/internal/clock"
 	"github.com/basmulder03/repo-keeper/internal/gitx"
 	"github.com/basmulder03/repo-keeper/internal/secrets"
@@ -29,7 +30,7 @@ func main() {
 	if os.Getenv(askpass.EnvMarker) == "1" { // git is asking for credentials: act as the helper
 		os.Exit(askpass.Run(os.Args[1:], os.Getenv, os.Stdout))
 	}
-	a := &app{out: os.Stdout, err: os.Stderr, in: os.Stdin, secrets: secrets.Keyring{}, newRunner: gitx.New, clock: clock.Real{}}
+	a := &app{out: os.Stdout, err: os.Stderr, in: os.Stdin, secrets: secrets.Keyring{}, newRunner: gitx.New, clock: clock.Real{}, openBrowser: browser.Open}
 	os.Exit(a.run(ctx, os.Args[1:]))
 }
 
@@ -57,6 +58,8 @@ func (a *app) run(ctx context.Context, args []string) int {
 		return a.cmdInit(ctx, rest)
 	case "config":
 		return a.cmdConfig(ctx, rest)
+	case "ui":
+		return a.cmdUI(ctx, rest)
 	case "accounts":
 		return a.cmdAccounts(ctx, rest)
 	case "discover":
@@ -84,6 +87,7 @@ Commands:
   config validate         check the configuration file
   daemon                  run the background service (scheduled syncs)
   status                  show tracked repositories and their last sync
+  ui                      open the web interface (signs in with a one-time link)
   accounts add|list|check|rm manage platform logins (tokens live in the OS keychain)
   discover                list what each account would clone (no changes)
   sync <repo>             fetch, fast-forward the default branch, optionally clean merged branches

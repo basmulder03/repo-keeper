@@ -1,0 +1,37 @@
+{{define "content"}}
+<h1>Debug</h1>
+<div class="panel">
+<dl class="kv">
+  <dt>Version</dt><dd>{{.Info.Version}}</dd>
+  <dt>git</dt><dd>{{.Info.GitVersion}}</dd>
+  <dt>Go runtime</dt><dd>{{.Info.GoVersion}}</dd>
+  <dt>Config file</dt><dd><code>{{.Info.ConfigPath}}</code></dd>
+  <dt>State directory</dt><dd><code>{{.Info.StateDir}}</code></dd>
+  <dt>UI address</dt><dd><code>{{.Info.UIAddr}}</code></dd>
+  <dt>Daemon started</dt><dd>{{stamp .Info.Started}}</dd>
+</dl>
+<p><a class="btn" href="/debug/bundle.json" download>Download diagnostics bundle</a> <span class="muted">JSON with state, events, git command log and configuration. Secrets are never included.</span></p>
+</div>
+
+<h2>Recent git commands</h2>
+<div class="panel">
+<table>
+  <thead><tr><th scope="col">When</th><th scope="col">Directory</th><th scope="col">Command</th><th scope="col">Exit</th><th scope="col">Took</th></tr></thead>
+  <tbody>
+  {{range .D.Commands}}<tr><td class="num">{{stamp .Time}}</td><td><code>{{.Dir}}</code></td><td><code>git {{join .Args " "}}</code>{{if .Err}}<br><span class="muted">{{.Err}}</span>{{end}}</td><td>{{.Exit}}</td><td>{{dur .Duration}}</td></tr>
+  {{else}}<tr><td colspan="5" class="muted">No git commands yet.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+
+<h2>Events</h2>
+<div class="panel">
+<table>
+  <thead><tr><th scope="col">When</th><th scope="col">Level</th><th scope="col">Code</th><th scope="col">Message</th></tr></thead>
+  <tbody>
+  {{range .D.Events}}<tr><td class="num">{{stamp .Time}}</td><td>{{.Level}}</td><td><code>{{.Code}}</code></td><td>{{.Message}}</td></tr>
+  {{else}}<tr><td colspan="4" class="muted">No events.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{end}}

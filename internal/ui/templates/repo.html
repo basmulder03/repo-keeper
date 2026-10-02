@@ -1,0 +1,76 @@
+{{define "content"}}
+{{with .D}}
+<h1>{{if .Repo.FullName}}{{.Repo.FullName}}{{else}}{{.Repo.Path}}{{end}}</h1>
+<div class="panel">
+<dl class="kv">
+  <dt>Status</dt><dd><span class="badge {{index .Status 0}}">{{index .Status 1}}</span></dd>
+  <dt>Path</dt><dd><code>{{.Repo.Path}}</code></dd>
+  <dt>Source</dt><dd>{{if .Repo.Source}}account <code>{{.Repo.Source}}</code>{{else}}configuration file{{end}}</dd>
+  <dt>Remote</dt><dd><code>{{.Repo.Remote}}</code>{{if .Repo.Host}} on <code>{{.Repo.Host}}</code>{{end}}</dd>
+  <dt>Default branch</dt><dd>{{if .Repo.DefaultBranch}}<code>{{.Repo.DefaultBranch}}</code>{{else}}unknown yet{{end}}</dd>
+  <dt>Last sync</dt><dd>{{stamp .Repo.LastSync}} ({{ago .Repo.LastSync}})</dd>
+  <dt>Next sync</dt><dd>{{stamp .Repo.NextSync}} ({{until .Repo.NextSync}})</dd>
+  {{if .Repo.LastError}}<dt>Last error</dt><dd><code>{{.Repo.LastError}}</code></dd>{{end}}
+  {{if .Repo.Failures}}<dt>Consecutive failures</dt><dd>{{.Repo.Failures}}</dd>{{end}}
+</dl>
+<p>
+  <form class="inline" method="post" action="/repos/{{.Repo.ID}}/sync">{{template "csrf" $}}<button class="primary" type="submit">Sync now</button></form>
+</p>
+</div>
+
+<h2>Branch cleanup</h2>
+<div class="panel">
+{{if .Report}}
+  <p>Mode: <code>{{.Report.Mode}}</code>{{if .Report.Blocked}} · <span class="badge warn">blocked: {{.Report.Blocked}}</span>{{end}}</p>
+  <table>
+    <caption>Latest evaluation</caption>
+    <thead><tr><th scope="col">Branch</th><th scope="col">Outcome</th><th scope="col">Reason</th><th scope="col">Tip</th></tr></thead>
+    <tbody>
+    {{range .Report.Items}}<tr><td><code>{{.Branch}}</code></td><td>{{.Outcome}}</td><td>{{.Reason}}{{if .Err}} — {{.Err}}{{end}}</td><td><code>{{short .SHA}}</code></td></tr>
+    {{else}}<tr><td colspan="4" class="muted">No local branches evaluated.</td></tr>{{end}}
+    </tbody>
+  </table>
+  <p>
+    <form class="inline" method="post" action="/repos/{{.Repo.ID}}/cleanup" data-confirm="Delete every branch currently marked would-delete in this repository? Each deletion is journaled and can be undone from the trash below.">
+      {{template "csrf" $}}<button class="danger" type="submit">Delete safe branches now</button>
+    </form>
+    <span class="muted">Applies the same safety rules as automatic cleanup, regardless of the configured mode. Nothing is deleted if the working tree is dirty.</span>
+  </p>
+{{else}}<p class="muted">Cleanup has not run for this repository (mode off, or no sync yet).</p>{{end}}
+</div>
+
+<h2>Deleted branches (recoverable)</h2>
+<div class="panel">
+<table>
+  <thead><tr><th scope="col">Branch</th><th scope="col">Tip</th><th scope="col">Deleted</th><th scope="col"><span class="muted">Action</span></th></tr></thead>
+  <tbody>
+  {{range .Trash}}<tr><td><code>{{.Branch}}</code></td><td><code>{{short .SHA}}</code></td><td>{{stamp .DeletedAt}}</td>
+    <td><form class="inline" method="post" action="/repos/{{$.D.Repo.ID}}/restore">{{template "csrf" $}}<input type="hidden" name="branch" value="{{.Branch}}"><button type="submit">Restore</button></form></td></tr>
+  {{else}}<tr><td colspan="4" class="muted">Nothing in the trash. Entries are kept for 30 days.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+
+<h2>Sync history</h2>
+<div class="panel">
+<table>
+  <thead><tr><th scope="col">When</th><th scope="col">Result</th><th scope="col">Default branch</th><th scope="col">Fetched</th><th scope="col">Duration</th><th scope="col">Detail</th></tr></thead>
+  <tbody>
+  {{range .Runs}}<tr><td class="num">{{stamp .Finished}}</td><td>{{.Status}}{{if .Reason}} ({{.Reason}}){{end}}</td><td>{{.FF}}</td><td>{{if .Fetched}}yes{{else}}no{{end}}</td><td>{{dur (.Finished.Sub .Started)}}</td><td>{{.Error}}</td></tr>
+  {{else}}<tr><td colspan="6" class="muted">No runs recorded yet.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+
+<h2>Audit entries for this repository</h2>
+<div class="panel">
+<table>
+  <thead><tr><th scope="col">When</th><th scope="col">Action</th><th scope="col">Branch</th><th scope="col">Tip</th><th scope="col">Reason</th></tr></thead>
+  <tbody>
+  {{range .Audit}}<tr><td class="num">{{stamp .Time}}</td><td>{{.Action}}</td><td><code>{{.Branch}}</code></td><td><code>{{short .SHA}}</code></td><td>{{.Reason}}</td></tr>
+  {{else}}<tr><td colspan="5" class="muted">No deletions or restores recorded.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+{{end}}

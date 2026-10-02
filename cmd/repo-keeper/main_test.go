@@ -21,10 +21,11 @@ func newApp(e *gitxtest.Env) (*app, *bytes.Buffer, *bytes.Buffer) {
 	var out, errb bytes.Buffer
 	return &app{
 		out: &out, err: &errb,
-		newRunner: func() (*gitx.Runner, error) { return e.R, nil },
-		secrets:   &secrets.Mem{},
-		in:        strings.NewReader(""),
-		clock:     clock.NewFake(time.Now().Add(time.Hour)),
+		newRunner:   func() (*gitx.Runner, error) { return e.R, nil },
+		secrets:     &secrets.Mem{},
+		in:          strings.NewReader(""),
+		clock:       clock.NewFake(time.Now().Add(time.Hour)),
+		openBrowser: func(string) error { return nil },
 	}, &out, &errb
 }
 

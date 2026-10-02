@@ -1,0 +1,17 @@
+{{define "content"}}
+<h1>Cleanup review</h1>
+<p class="muted">Local branches only. Remote branches are never touched. {{.D.Candidates}} branch(es) currently qualify for deletion across {{len .D.Views}} repositories.</p>
+{{range .D.Views}}
+{{if .Report.Items}}
+<div class="panel">
+  <h2 style="margin-top:0"><a href="/repos/{{.Repo.ID}}">{{if .Repo.FullName}}{{.Repo.FullName}}{{else}}{{.Repo.Path}}{{end}}</a> <span class="muted">· mode <code>{{.Mode}}</code></span>{{if .Report.Blocked}} <span class="badge warn">blocked: {{.Report.Blocked}}</span>{{end}}</h2>
+  <table>
+    <thead><tr><th scope="col">Branch</th><th scope="col">Outcome</th><th scope="col">Reason</th></tr></thead>
+    <tbody>
+    {{range .Report.Items}}<tr><td><code>{{.Branch}}</code></td><td>{{.Outcome}}</td><td>{{.Reason}}</td></tr>{{end}}
+    </tbody>
+  </table>
+</div>
+{{end}}
+{{else}}<p class="muted">No cleanup data yet. Enable <code>cleanup.mode = "dry-run"</code> and let a sync run.</p>{{end}}
+{{end}}

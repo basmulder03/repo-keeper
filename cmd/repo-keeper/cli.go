@@ -24,11 +24,12 @@ import (
 
 // app carries injectable dependencies so commands are testable without touching the real HOME.
 type app struct {
-	out, err  io.Writer
-	in        io.Reader
-	secrets   secrets.Store
-	newRunner func() (*gitx.Runner, error)
-	clock     clock.Clock
+	out, err    io.Writer
+	in          io.Reader
+	secrets     secrets.Store
+	newRunner   func() (*gitx.Runner, error)
+	clock       clock.Clock
+	openBrowser func(url string) error
 }
 
 const trashRetention = 30 * 24 * time.Hour

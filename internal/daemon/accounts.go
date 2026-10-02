@@ -90,6 +90,7 @@ func (d *Daemon) discoveryLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-d.Clock.After(30 * time.Second):
+		case <-d.discWake:
 		}
 	}
 }

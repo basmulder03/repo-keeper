@@ -75,7 +75,7 @@ Priority: **M** must (v1.0), **S** should, **C** could (post-1.0). Each requirem
 | FR-U5 | S | Desktop notifications on persistent failure/expired credentials (opt-in). |
 | FR-U6 | S | UI accessible (WCAG 2.2 AA), keyboard navigable, light/dark, works without JS framework build step. |
 | FR-U7 | S | Optional **tray helper** (`repo-keeper-tray`, separate process): status icon (ok / syncing / attention), menu: Open UI, Sync now, Pause/Resume, Open logs, Quit. Talks to the daemon only through the local API; daemon never depends on it. |
-| FR-U8 | M | `repo-keeper ui` opens the UI of the running daemon in the default browser (starts the daemon if needed); `--print-url` for headless/SSH. UI port: prefer configured/default `7878`, else any free port; discovery via runtime file (FR-U9). |
+| FR-U8 | M | `repo-keeper ui` opens the UI of the running daemon in the default browser; `--print-url` for headless/SSH. It deliberately does **not** spawn the daemon (explicit service control, nothing hidden in the background; start it with systemd or `repo-keeper daemon`). UI port: prefer configured/default `7878`, else any free port; discovery via runtime file (FR-U9). |
 | FR-U9 | M | Daemon writes `ui.json` (address, pid, started_at) to `$XDG_RUNTIME_DIR/repo-keeper/` (macOS/Windows: per-user runtime dir), mode `0600`; CLI and tray read it. `ui` mints a **one-time login URL** (short TTL, single use) that sets the session cookie, so no token is typed or stored in browser history. |
 
 ### Operation

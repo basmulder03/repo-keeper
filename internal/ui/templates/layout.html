@@ -1,0 +1,32 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · repo-keeper</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+{{if not .Anon}}
+<header class="top"><div class="bar">
+  <span class="brand">repo-keeper</span>
+  <nav aria-label="Main">
+    <a href="/"{{if eq .Active "dashboard"}} aria-current="page"{{end}}>Dashboard</a>
+    <a href="/accounts"{{if eq .Active "accounts"}} aria-current="page"{{end}}>Accounts</a>
+    <a href="/cleanup"{{if eq .Active "cleanup"}} aria-current="page"{{end}}>Cleanup</a>
+    <a href="/audit"{{if eq .Active "audit"}} aria-current="page"{{end}}>Audit</a>
+    <a href="/config"{{if eq .Active "config"}} aria-current="page"{{end}}>Configuration</a>
+    <a href="/debug"{{if eq .Active "debug"}} aria-current="page"{{end}}>Debug</a>
+  </nav>
+  <span class="muted">v{{.Info.Version}}</span>
+  <form class="inline" method="post" action="/logout">{{template "csrf" .}}<button type="submit">Sign out</button></form>
+</div></header>
+{{end}}
+<main id="main">
+{{if .Msg}}<p class="flash ok" role="status">{{.Msg}}</p>{{end}}
+{{template "content" .}}
+</main>
+</body>
+</html>{{end}}

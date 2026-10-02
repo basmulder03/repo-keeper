@@ -1,0 +1,64 @@
+{{define "live"}}
+<div class="cards">
+  <div class="card"><b>{{.D.Counts.Total}}</b><span>repositories</span></div>
+  <div class="card"><b>{{.D.Counts.OK}}</b><span>up to date</span></div>
+  <div class="card"><b>{{.D.Counts.Attention}}</b><span>need attention</span></div>
+  <div class="card"><b>{{.D.Counts.Pending}}</b><span>pending / inactive</span></div>
+</div>
+
+<div class="panel">
+<table>
+  <caption>Repositories</caption>
+  <thead><tr><th scope="col">Repository</th><th scope="col">Source</th><th scope="col">Default</th><th scope="col">Status</th><th scope="col">Last sync</th><th scope="col">Next</th><th scope="col"><span class="muted">Action</span></th></tr></thead>
+  <tbody>
+  {{range .D.Rows}}
+  <tr data-text="{{lower .Path}} {{lower .FullName}} {{lower .Label}} {{lower .Source}}">
+    <td><a href="/repos/{{.ID}}">{{if .FullName}}{{.FullName}}{{else}}{{.Path}}{{end}}</a>{{if .FullName}}<br><span class="muted"><code>{{.Path}}</code></span>{{end}}</td>
+    <td>{{if .Source}}{{.Source}}{{else}}config{{end}}</td>
+    <td>{{if .DefaultBranch}}<code>{{.DefaultBranch}}</code>{{else}}—{{end}}</td>
+    <td><span class="badge {{.Class}}">{{.Label}}</span></td>
+    <td class="num" title="{{stamp .LastSync}}">{{ago .LastSync}}</td>
+    <td class="num">{{until .NextSync}}</td>
+    <td><form class="inline" method="post" action="/repos/{{.ID}}/sync">{{template "csrf" $}}<input type="hidden" name="next" value="/"><button type="submit">Sync now</button></form></td>
+  </tr>
+  {{else}}
+  <tr><td colspan="7" class="muted">No repositories yet. Add <code>[[repo]]</code> entries or an <a href="/accounts">account</a> in the <a href="/config">configuration</a>.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+
+<div class="panel">
+<table>
+  <caption>Remote hosts (rate limits)</caption>
+  <thead><tr><th scope="col">Host</th><th scope="col">Quota</th><th scope="col">State</th><th scope="col">In flight</th></tr></thead>
+  <tbody>
+  {{range .D.Hosts}}
+  <tr><td><code>{{.Host}}</code></td>
+    <td>{{if .Quota.Limit}}{{.Quota.Remaining}} / {{.Quota.Limit}}{{else}}—{{end}}</td>
+    <td>{{if not .Cooldown.IsZero}}cooling down ({{.CooldownBy}}) until {{stamp .Cooldown}}{{else if .CircuitOpen}}circuit open{{else}}ready{{end}}</td>
+    <td>{{.InFlight}}</td></tr>
+  {{else}}<tr><td colspan="4" class="muted">No remote has been contacted yet.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+
+<div class="panel">
+<table>
+  <caption>Recent events</caption>
+  <tbody>
+  {{range .D.Events}}<tr><td class="num">{{ago .Time}}</td><td>{{.Level}}</td><td><code>{{.Code}}</code></td><td>{{.Message}}</td></tr>
+  {{else}}<tr><td class="muted">Nothing noteworthy yet.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+{{define "content"}}
+<h1>Dashboard</h1>
+<div class="toolbar">
+  <label for="filter" class="muted">Filter</label>
+  <input id="filter" type="search" placeholder="path, name, status…" autocomplete="off">
+</div>
+<div id="live" data-src="/fragments/dashboard" aria-live="polite">{{template "live" .}}</div>
+{{end}}

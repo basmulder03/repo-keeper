@@ -2,7 +2,7 @@
 
 A lightweight, local-first background agent that keeps every repository you can access on GitHub, GitLab, Bitbucket, Azure DevOps and Gitea/Forgejo cloned and up to date, safely.
 
-> **Status:** early development (M2 done: local engine, rate limiting, scheduler, daemon). First target: Linux/NixOS + GitHub. See [`docs/`](docs/README.md) and the [roadmap](docs/ROADMAP.md).
+> **Status:** early development: sync engine, GitHub, rate limiting, daemon and web UI work; tray, more providers and packaging are next. First target: Linux/NixOS. See [`docs/`](docs/README.md) and the [roadmap](docs/ROADMAP.md).
 
 ## What it does
 
@@ -52,6 +52,7 @@ $EDITOR ~/.config/repo-keeper/config.toml   # set [general] root = "/home/you/co
 ./bin/repo-keeper discover                  # preview what would be cloned
 ./bin/repo-keeper daemon                    # sync in the background (see packaging/systemd)
 ./bin/repo-keeper status
+./bin/repo-keeper ui                        # opens the web interface (one-time sign-in link; --print-url for SSH)
 ```
 
 No keychain (headless server, container)? Use `--token-file /run/secrets/gh-token` (mode 600) or `--token-env GH_TOKEN` instead of `--token-stdin`.

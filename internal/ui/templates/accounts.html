@@ -1,0 +1,34 @@
+{{define "content"}}
+<h1>Accounts</h1>
+<div class="panel">
+<table>
+  <caption>Platform logins</caption>
+  <thead><tr><th scope="col">Name</th><th scope="col">Platform</th><th scope="col">Status</th><th scope="col">Login</th><th scope="col">Repositories</th><th scope="col">Last listing</th><th scope="col">Next</th><th scope="col"><span class="muted">Action</span></th></tr></thead>
+  <tbody>
+  {{range .D.Accounts}}
+  <tr>
+    <td><code>{{.Name}}</code></td><td>{{.Provider}}</td>
+    <td>{{if eq .Status "ok"}}<span class="badge ok">ok</span>{{else if .Status}}<span class="badge err">{{.Status}}</span>{{else}}<span class="badge muted">pending</span>{{end}}
+      {{if .Error}}<br><span class="muted">{{.Error}}</span>{{end}}
+      {{if .Warnings}}<br><span class="badge warn">warning</span> {{.Warnings}}{{end}}
+      {{if not .Expires.IsZero}}<br><span class="muted">token expires {{stamp .Expires}}</span>{{end}}</td>
+    <td>{{if .Login}}{{.Login}}{{else}}—{{end}}</td><td>{{.RepoCount}}</td>
+    <td class="num">{{ago .Discovered}}</td><td class="num">{{until .NextDiscovery}}</td>
+    <td><form class="inline" method="post" action="/accounts/{{.Name}}/discover">{{template "csrf" $}}<button type="submit">List repositories now</button></form></td>
+  </tr>
+  {{else}}<tr><td colspan="8" class="muted">No accounts. Add one with <code>repo-keeper accounts add</code>; tokens are stored in the OS keychain and are never shown here.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+<div class="panel">
+<table>
+  <caption>API rate limits</caption>
+  <thead><tr><th scope="col">Host</th><th scope="col">Remaining</th><th scope="col">Resets</th><th scope="col">State</th></tr></thead>
+  <tbody>
+  {{range .D.Hosts}}<tr><td><code>{{.Host}}</code></td><td>{{if .Quota.Limit}}{{.Quota.Remaining}} / {{.Quota.Limit}}{{else}}—{{end}}</td><td>{{if .Quota.Limit}}{{stamp .Quota.Reset}}{{else}}—{{end}}</td>
+   <td>{{if not .Cooldown.IsZero}}cooling down until {{stamp .Cooldown}} ({{.CooldownBy}}){{else}}ready{{end}}</td></tr>
+  {{else}}<tr><td colspan="4" class="muted">No requests yet.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
