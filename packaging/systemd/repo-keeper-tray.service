@@ -1,0 +1,20 @@
+# User unit: starts the optional tray icon with your graphical session.
+# Install to ~/.config/systemd/user/ then `systemctl --user enable --now repo-keeper-tray`
+[Unit]
+Description=repo-keeper tray icon
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/repo-keeper-tray
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+
+[Install]
+WantedBy=graphical-session.target

@@ -103,6 +103,17 @@ func (f *fake) Audit(context.Context, int) ([]audit.Entry, error) {
 func (f *fake) Trash(context.Context, int64) ([]gitx.TrashRef, error) {
 	return []gitx.TrashRef{{Branch: "gone/" + xss, SHA: "0123456789abcdef", DeletedAt: now}}, nil
 }
+func (f *fake) Status(context.Context) (Status, error) {
+	return Status{Version: "1.2.3", Repos: 3, UpToDate: 1, NeedAttention: 1, Pending: 1, Accounts: 1, AccountsAttention: 1}, nil
+}
+func (f *fake) SyncAll(context.Context) error { f.rec("sync-all"); return nil }
+func (f *fake) SetPaused(p bool) {
+	if p {
+		f.rec("pause")
+	} else {
+		f.rec("resume")
+	}
+}
 func (f *fake) SyncNow(_ context.Context, id int64) error { f.rec("sync"); return nil }
 func (f *fake) DiscoverNow(_ context.Context, a string) error {
 	f.rec("discover:" + a)
@@ -617,5 +628,42 @@ func TestCleanupNow_BusyRepo_Is409NotAnError(t *testing.T) {
 	w := e.do(http.MethodPost, "/repos/1/cleanup", url.Values{"csrf": {csrf}}, cookie(c))
 	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "being synced") {
 		t.Fatalf("code=%d body=%s", w.Code, w.Body)
+	}
+}
+
+func TestMachineAPI_RequiresControlToken_AndNeverCookies(t *testing.T) {
+	e := newEnv(t)
+	c, csrf := e.login() // a browser session must NOT unlock the machine API
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, "/api/status"}, {http.MethodPost, "/api/sync-all"}, {http.MethodPost, "/api/pause"}, {http.MethodPost, "/api/resume"},
+	} {
+		if w := e.do(tc.method, tc.path, url.Values{"csrf": {csrf}}, cookie(c)); w.Code != http.StatusUnauthorized {
+			t.Errorf("%s %s with a session cookie => %d", tc.method, tc.path, w.Code)
+		}
+		if w := e.do(tc.method, tc.path, nil, hdr("Authorization", "Bearer wrong")); w.Code != http.StatusUnauthorized {
+			t.Errorf("%s %s with a wrong token => %d", tc.method, tc.path, w.Code)
+		}
+	}
+	if e.b.called("sync-all") || e.b.called("pause") {
+		t.Fatal("backend reached without the control token")
+	}
+}
+
+func TestMachineAPI_StatusAndActions(t *testing.T) {
+	e := newEnv(t)
+	auth := hdr("Authorization", "Bearer "+e.s.Control())
+	w := e.do(http.MethodGet, "/api/status", nil, auth)
+	var st Status
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &st) != nil || st.Repos != 3 || st.NeedAttention != 1 {
+		t.Fatalf("status: %d %s", w.Code, w.Body)
+	}
+	for path, call := range map[string]string{"/api/sync-all": "sync-all", "/api/pause": "pause", "/api/resume": "resume"} {
+		if w := e.do(http.MethodPost, path, nil, auth); w.Code != http.StatusNoContent || !e.b.called(call) {
+			t.Errorf("%s => %d (called=%v)", path, w.Code, e.b.called(call))
+		}
+	}
+	// foreign origins cannot drive it even with a leaked token (browsers can't set Authorization cross-origin anyway)
+	if w := e.do(http.MethodPost, "/api/pause", nil, auth, hdr("Origin", "http://evil.example")); w.Code != http.StatusForbidden {
+		t.Errorf("cross-origin => %d", w.Code)
 	}
 }

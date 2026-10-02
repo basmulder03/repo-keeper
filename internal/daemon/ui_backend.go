@@ -172,6 +172,56 @@ func (b uiBackend) Trash(ctx context.Context, id int64) ([]gitx.TrashRef, error)
 	return g.TrashList(ctx)
 }
 
+// Status summarises the fleet for the tray helper.
+func (b uiBackend) Status(ctx context.Context) (ui.Status, error) {
+	st := ui.Status{Version: b.d.version(), Paused: b.d.Sched.Paused()}
+	repos, err := b.d.Store.ListRepos(ctx)
+	if err != nil {
+		return st, err
+	}
+	st.Repos = len(repos)
+	for _, r := range repos {
+		switch {
+		case r.NeedsAttention:
+			st.NeedAttention++
+		case r.LastStatus == "":
+			st.Pending++
+		case r.LastStatus == "ok":
+			st.UpToDate++
+		default:
+			st.NeedAttention++ // failed but not yet flagged still deserves a glance
+		}
+	}
+	accts, err := b.d.Store.ListAccounts(ctx)
+	if err != nil {
+		return st, err
+	}
+	st.Accounts = len(accts)
+	for _, a := range accts {
+		if a.Status != "" && a.Status != "ok" {
+			st.AccountsAttention++
+		}
+	}
+	return st, nil
+}
+
+// SyncAll queues every active repository now; the rate limiter still paces the actual work.
+func (b uiBackend) SyncAll(ctx context.Context) error {
+	repos, err := b.d.Store.ListRepos(ctx)
+	if err != nil {
+		return err
+	}
+	for _, r := range repos {
+		if err := b.d.Sched.TriggerNow(ctx, r.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SetPaused pauses or resumes scheduled syncs.
+func (b uiBackend) SetPaused(p bool) { b.d.Sched.SetPaused(p) }
+
 func (b uiBackend) SyncNow(ctx context.Context, id int64) error {
 	if _, err := b.d.Store.Get(ctx, id); err != nil {
 		return err

@@ -50,7 +50,8 @@
 | `instance` | Single-instance OS file lock (flock / exclusive-share handle), released automatically on crash |
 | `daemon` | Wiring: lock → store → config → limiter → scheduler; per-repo job (limiter permit → `syncer` → classify → record); config poll/reload |
 | `ui` | HTTP handlers, templates, static assets, session/CSRF |
-| `tray` (cmd) | Optional tray helper; client of the local API only |
+| `tray` + `cmd/repo-keeper-tray` | Optional tray helper: status model, generated icons, API client (control token); no state, no secrets |
+| `control` | Types shared by daemon, CLI and tray (runtime file, status) |
 | `svc` | OS autostart integration (systemd/launchd/Task Scheduler) |
 | `obs` | slog setup, redaction, in-memory ring buffer for UI log view |
 

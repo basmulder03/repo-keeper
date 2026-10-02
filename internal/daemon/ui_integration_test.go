@@ -233,3 +233,55 @@ func TestUI_NoUIFlag_AndDisabledInConfig(t *testing.T) {
 		t.Fatal("UI started although disabled")
 	}
 }
+
+func TestUI_MachineAPI_StatusPauseSyncAll(t *testing.T) {
+	e := gitxtest.New(t)
+	cfg := "[general]\ninterval = \"30m\"\n[cleanup]\nmode = \"off\"\n[[repo]]\npath = \"" + e.Work + "\"\n"
+	r, b := startWithUI(t, e, cfg)
+	r.waitFor(t, "first sync", func() bool { rs := r.repos(t); return len(rs) == 1 && rs[0].LastStatus == "ok" })
+
+	var rf ui.RuntimeFile
+	data, _ := os.ReadFile(filepath.Join(r.d.RuntimeDir, "ui.json"))
+	_ = json.Unmarshal(data, &rf)
+	call := func(method, path string) (int, string) {
+		req, _ := http.NewRequestWithContext(context.Background(), method, "http://"+rf.Addr+path, http.NoBody)
+		req.Header.Set("Authorization", "Bearer "+rf.Control)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		bd, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(bd)
+	}
+	var st ui.Status
+	code, body := call(http.MethodGet, "/api/status")
+	if code != 200 || json.Unmarshal([]byte(body), &st) != nil || st.Repos != 1 || st.UpToDate != 1 || st.Paused || st.Version != "test" {
+		t.Fatalf("status: %d %s", code, body)
+	}
+
+	// paused: a teammate's push is NOT picked up on schedule, but "sync all" still works
+	if code, _ := call(http.MethodPost, "/api/pause"); code != http.StatusNoContent {
+		t.Fatalf("pause: %d", code)
+	}
+	if _, body := call(http.MethodGet, "/api/status"); !strings.Contains(body, `"paused":true`) {
+		t.Fatalf("status after pause: %s", body)
+	}
+	other := e.Clone("t1")
+	want := e.Commit(other, "n.txt", "n", "n")
+	e.Git(other, "push", "-q", "origin", "main")
+	r.clk.BlockUntil(3, time.Second)
+	r.clk.Advance(2 * time.Hour)
+	time.Sleep(150 * time.Millisecond)
+	if e.Git(e.Work, "rev-parse", "main") == want {
+		t.Fatal("scheduled sync ran while paused")
+	}
+	if code, _ := call(http.MethodPost, "/api/sync-all"); code != http.StatusNoContent {
+		t.Fatalf("sync-all: %d", code)
+	}
+	r.waitFor(t, "sync-all applied while paused", func() bool { return e.Git(e.Work, "rev-parse", "main") == want })
+	if code, _ := call(http.MethodPost, "/api/resume"); code != http.StatusNoContent {
+		t.Fatalf("resume: %d", code)
+	}
+	_ = b
+}

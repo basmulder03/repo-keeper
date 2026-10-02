@@ -473,3 +473,28 @@ func (s *Server) handleBundle(w http.ResponseWriter, r *http.Request, _ sessionI
 	w.Header().Set("Content-Disposition", `attachment; filename="repo-keeper-diagnostics.json"`)
 	_, _ = w.Write(b)
 }
+
+// ---- machine API (control token), used by the tray helper
+
+func (s *Server) handleAPIStatus(w http.ResponseWriter, r *http.Request) {
+	st, err := s.Backend.Status(r.Context())
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(st)
+}
+
+func (s *Server) handleAPISyncAll(w http.ResponseWriter, r *http.Request) {
+	if err := s.Backend.SyncAll(r.Context()); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleAPIPause(w http.ResponseWriter, _ *http.Request, paused bool) {
+	s.Backend.SetPaused(paused)
+	w.WriteHeader(http.StatusNoContent)
+}

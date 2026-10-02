@@ -258,3 +258,27 @@ func TestRun_Shutdown_WaitsForJobAndDoesNotRecordIt(t *testing.T) {
 		t.Fatalf("cancelled run was recorded: %+v", repos[0])
 	}
 }
+
+func TestRun_Paused_StopsScheduledButNotManual_AndResumeWakes(t *testing.T) {
+	r := newRig(t, 2, okResult)
+	_ = r.s.SyncRepos(t.Context(), []store.Spec{{Path: "/a", Remote: "o", Interval: time.Hour}}, func(int) time.Time { return t0 })
+	r.sc.SetPaused(true)
+	defer r.start(t)()
+	time.Sleep(80 * time.Millisecond)
+	if r.cnt.Load() != 0 || !r.sc.Paused() {
+		t.Fatal("paused scheduler dispatched work")
+	}
+	repos, _ := r.s.ListRepos(t.Context())
+	if err := r.sc.TriggerNow(t.Context(), repos[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	r.wait(t, 1)
+	r.clk.BlockUntil(1, time.Second)
+	r.clk.Advance(2 * time.Hour)
+	time.Sleep(50 * time.Millisecond)
+	if r.cnt.Load() != 1 {
+		t.Fatal("paused scheduler ran a scheduled sync")
+	}
+	r.sc.SetPaused(false) // resuming picks up the overdue repo without waiting for the next tick
+	r.wait(t, 1)
+}

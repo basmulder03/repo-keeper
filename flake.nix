@@ -14,9 +14,9 @@
           pname = "repo-keeper";
           version = self.shortRev or self.dirtyShortRev or "dev";
           src = ./.;
-          vendorHash = "sha256-8F+y7ZFCew6sLn5QP/ytSikaHV3ENw6tUzQy1kRfGL0="; # refresh with lib.fakeHash after changing go.mod
+          vendorHash = "sha256-RYbPB9cNhC836bnmoTWCgQfpWrRoaz0V/wqKq4hmS18="; # refresh with lib.fakeHash after changing go.mod
           env.CGO_ENABLED = 0;
-          subPackages = [ "cmd/repo-keeper" ];
+          subPackages = [ "cmd/repo-keeper" "cmd/repo-keeper-tray" ];
           ldflags = [ "-s" "-w" "-X main.version=${self.shortRev or "dev"}" ];
           nativeCheckInputs = [ pkgs.git ];
           meta = {

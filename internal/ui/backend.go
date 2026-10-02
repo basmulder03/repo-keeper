@@ -9,6 +9,7 @@ import (
 
 	"github.com/basmulder03/repo-keeper/internal/audit"
 	"github.com/basmulder03/repo-keeper/internal/cleanup"
+	"github.com/basmulder03/repo-keeper/internal/control"
 	"github.com/basmulder03/repo-keeper/internal/gitx"
 	"github.com/basmulder03/repo-keeper/internal/ratelimit"
 	"github.com/basmulder03/repo-keeper/internal/store"
@@ -32,6 +33,9 @@ type CleanupView struct {
 	Report cleanup.Report
 }
 
+// Status is the compact summary served to the tray helper.
+type Status = control.Status
+
 // Backend is everything the UI may ask of the daemon; the UI never touches git, the DB or secrets itself.
 type Backend interface {
 	Info() Info
@@ -46,6 +50,9 @@ type Backend interface {
 	Audit(ctx context.Context, n int) ([]audit.Entry, error)
 	Trash(ctx context.Context, id int64) ([]gitx.TrashRef, error)
 
+	Status(ctx context.Context) (Status, error)
+	SyncAll(ctx context.Context) error
+	SetPaused(paused bool)
 	SyncNow(ctx context.Context, id int64) error
 	DiscoverNow(ctx context.Context, account string) error
 	CleanupNow(ctx context.Context, id int64) (cleanup.Report, error)

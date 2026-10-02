@@ -53,6 +53,7 @@ $EDITOR ~/.config/repo-keeper/config.toml   # set [general] root = "/home/you/co
 ./bin/repo-keeper daemon                    # sync in the background (see packaging/systemd)
 ./bin/repo-keeper status
 ./bin/repo-keeper ui                        # opens the web interface (one-time sign-in link; --print-url for SSH)
+./bin/repo-keeper-tray &                    # optional status icon (KDE, waybar/sway, GNOME with AppIndicator)
 ```
 
 No keychain (headless server, container)? Use `--token-file /run/secrets/gh-token` (mode 600) or `--token-env GH_TOKEN` instead of `--token-stdin`.

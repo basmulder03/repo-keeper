@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/basmulder03/repo-keeper/internal/clock"
@@ -49,6 +50,7 @@ type Scheduler struct {
 
 	mu       sync.Mutex
 	inflight map[int64]bool
+	paused   atomic.Bool
 	forced   map[int64]bool
 	wake     chan struct{}
 }
@@ -117,7 +119,7 @@ func (s *Scheduler) dispatch(ctx context.Context, wg *sync.WaitGroup) {
 		}
 		return
 	}
-	quiet := s.Quiet != nil && s.Quiet(now)
+	quiet := s.paused.Load() || (s.Quiet != nil && s.Quiet(now)) // paused and quiet hours both stop scheduled work only
 	for _, r := range due {
 		s.mu.Lock()
 		busy, forced := s.inflight[r.ID], s.forced[r.ID]
@@ -213,3 +215,14 @@ func (s *Scheduler) Wake() {
 	default:
 	}
 }
+
+// SetPaused stops (true) or resumes (false) scheduled syncs; manual triggers still run.
+func (s *Scheduler) SetPaused(p bool) {
+	s.paused.Store(p)
+	if !p {
+		s.Wake()
+	}
+}
+
+// Paused reports whether scheduled syncs are paused.
+func (s *Scheduler) Paused() bool { return s.paused.Load() }

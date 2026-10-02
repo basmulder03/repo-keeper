@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/basmulder03/repo-keeper/internal/clock"
+	"github.com/basmulder03/repo-keeper/internal/control"
 )
 
 //go:embed templates/*.html static/*
@@ -47,13 +48,7 @@ type Server struct {
 }
 
 // RuntimeFile is what `repo-keeper ui` and the tray read to find the daemon.
-type RuntimeFile struct {
-	Addr    string    `json:"addr"`
-	PID     int       `json:"pid"`
-	Started time.Time `json:"started"`
-	Control string    `json:"control"`
-	Version string    `json:"version"`
-}
+type RuntimeFile = control.RuntimeFile
 
 // Listen binds a loopback port, preferring preferred and falling back to any free one. Never non-loopback.
 func Listen(preferred int) (net.Listener, error) {
@@ -175,7 +170,11 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
 
 	mux.HandleFunc("GET /login", s.handleLogin)
-	mux.HandleFunc("POST /api/login-url", s.handleLoginURL)
+	mux.HandleFunc("GET /api/status", s.controlOnly(s.handleAPIStatus))
+	mux.HandleFunc("POST /api/sync-all", s.controlOnly(s.handleAPISyncAll))
+	mux.HandleFunc("POST /api/pause", s.controlOnly(func(w http.ResponseWriter, r *http.Request) { s.handleAPIPause(w, r, true) }))
+	mux.HandleFunc("POST /api/resume", s.controlOnly(func(w http.ResponseWriter, r *http.Request) { s.handleAPIPause(w, r, false) }))
+	mux.HandleFunc("POST /api/login-url", s.controlOnly(s.handleLoginURL))
 
 	mux.HandleFunc("GET /{$}", s.authed(s.handleDashboard))
 	mux.HandleFunc("GET /fragments/dashboard", s.authed(s.handleDashboardFragment))
@@ -278,14 +277,21 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther) // the code never stays in the address bar or history
 }
 
+// controlOnly guards the machine API (tray helper, CLI): the token in the 0600 runtime file is the credential.
+func (s *Server) controlOnly(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		const prefix = "Bearer "
+		hv := r.Header.Get("Authorization")
+		if !strings.HasPrefix(hv, prefix) || !equal(strings.TrimPrefix(hv, prefix), s.control) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		h(w, r)
+	}
+}
+
 // handleLoginURL mints a one-time login URL for the CLI; the control token in the 0600 runtime file is the credential.
 func (s *Server) handleLoginURL(w http.ResponseWriter, r *http.Request) {
-	const prefix = "Bearer "
-	h := r.Header.Get("Authorization")
-	if !strings.HasPrefix(h, prefix) || !equal(strings.TrimPrefix(h, prefix), s.control) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"url": "http://" + s.addr + "/login?code=" + s.auth.mintCode()})
 }
