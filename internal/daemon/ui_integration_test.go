@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -124,7 +125,7 @@ func TestUI_EndToEnd_SyncNowConfigCleanupRestoreAuditDebug(t *testing.T) {
 	e.Git(e.Work, "push", "-q", "origin", "main")
 	e.Git(e.Origin, "branch", "-D", "feat")
 
-	cfg := "[general]\ninterval = \"30m\"\n[cleanup]\nmode = \"dry-run\"\nmin_age = \"0s\"\n[[repo]]\npath = \"" + e.Work + "\"\n"
+	cfg := "[general]\ninterval = \"30m\"\n[cleanup]\nmode = \"dry-run\"\nmin_age = \"0s\"\n[[repo]]\npath = " + strconv.Quote(e.Work) + "\n"
 	r, b := startWithUI(t, e, cfg)
 	r.waitFor(t, "first sync", func() bool { rs := r.repos(t); return len(rs) == 1 && rs[0].LastStatus == "ok" })
 
@@ -224,7 +225,7 @@ func TestUI_EndToEnd_SyncNowConfigCleanupRestoreAuditDebug(t *testing.T) {
 	if len(hist) != 2 {
 		t.Fatalf("every change keeps a backup of the previous file: want 2, got %d", len(hist))
 	}
-	if fi, _ := os.Stat(r.cfgPath); fi.Mode().Perm() != 0o600 {
+	if fi, _ := os.Stat(r.cfgPath); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 { // Windows has no POSIX mode bits
 		t.Fatalf("config mode %v", fi.Mode().Perm())
 	}
 	if code, body := b.post("/settings/repos/remove", url.Values{"path": {e2}}); code != 200 || !strings.Contains(body, "removed from the list") {
@@ -257,7 +258,7 @@ func TestUI_NoUIFlag_AndDisabledInConfig(t *testing.T) {
 
 func TestUI_MachineAPI_StatusPauseSyncAll(t *testing.T) {
 	e := gitxtest.New(t)
-	cfg := "[general]\ninterval = \"30m\"\n[cleanup]\nmode = \"off\"\n[[repo]]\npath = \"" + e.Work + "\"\n"
+	cfg := "[general]\ninterval = \"30m\"\n[cleanup]\nmode = \"off\"\n[[repo]]\npath = " + strconv.Quote(e.Work) + "\n"
 	r, b := startWithUI(t, e, cfg)
 	r.waitFor(t, "first sync", func() bool { rs := r.repos(t); return len(rs) == 1 && rs[0].LastStatus == "ok" })
 

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -56,7 +57,7 @@ func setup(t *testing.T) (a *app, stdout, stderr *strings.Builder, cfg string, s
 	a.newRunner = func() (*gitx.Runner, error) { return e.R, nil }
 	cfg = filepath.Join(e.Root, "config.toml")
 	root := filepath.Join(e.Root, "code")
-	_ = os.WriteFile(cfg, []byte("[general]\nroot = \""+root+"\"\n"), 0o600)
+	_ = os.WriteFile(cfg, []byte("[general]\nroot = "+strconv.Quote(root)+"\n"), 0o600)
 	_ = os.MkdirAll(filepath.Join(root, "github", "acme", "have"), 0o750)
 	return a, &out, &errb, cfg, fakeGitHub(t)
 }
@@ -226,7 +227,7 @@ func TestAccounts_EncryptedFileBackend_EndToEnd(t *testing.T) {
 	t.Setenv("REPO_KEEPER_PASSPHRASE_FILE", pass)
 	encPath := filepath.Join(dir, "secrets.enc")
 	body, _ := os.ReadFile(cfg)
-	_ = os.WriteFile(cfg, append(body, []byte("secrets = \"file\"\nsecrets_file = \""+encPath+"\"\n")...), 0o600)
+	_ = os.WriteFile(cfg, append(body, []byte("secrets = \"file\"\nsecrets_file = "+strconv.Quote(encPath)+"\n")...), 0o600)
 	// "secrets" keys belong to [general], which setup() already opened; the file ends inside it
 	a.in = strings.NewReader(tok + "\n")
 	ctx := context.Background()

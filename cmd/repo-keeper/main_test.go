@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -174,7 +175,7 @@ func TestCLI_Daemon_RunsAndStatusShowsRepo(t *testing.T) {
 	a, out, errb := newApp(e)
 	cfg := filepath.Join(e.Root, "config.toml")
 	state := filepath.Join(e.Root, "state")
-	_ = os.WriteFile(cfg, []byte("[cleanup]\nmode = \"off\"\n[[repo]]\npath = \""+e.Work+"\"\n"), 0o600)
+	_ = os.WriteFile(cfg, []byte("[cleanup]\nmode = \"off\"\n[[repo]]\npath = "+strconv.Quote(e.Work)+"\n"), 0o600)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan int, 1)

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -47,7 +48,7 @@ func startManaged(t *testing.T, cfgFmt string) *managed {
 	root := filepath.Join(t.TempDir(), "code")
 	cfg := cfgFmt
 	if strings.Contains(cfgFmt, "%q") {
-		cfg = strings.Replace(cfgFmt, "%q", `"`+root+`"`, 1)
+		cfg = strings.Replace(cfgFmt, "%q", strconv.Quote(root), 1)
 	}
 	r, b := startWithUI(t, e, cfg)
 	// credential checks queue behind the per-host rate limiter, which runs on the fake clock
@@ -342,7 +343,8 @@ func TestManage_ReadOnlyConfig_RefusesEveryForm(t *testing.T) {
 	e := gitxtest.New(t)
 	dir := t.TempDir()
 	real := filepath.Join(dir, "managed.toml")
-	writeCfg(t, real, "[general]\nroot = \"/r\"\n")
+	content := "[general]\nroot = " + strconv.Quote(filepath.Join(dir, "code")) + "\n"
+	writeCfg(t, real, content)
 	link := filepath.Join(dir, "config.toml")
 	if err := os.Symlink(real, link); err != nil {
 		t.Skip("symlinks unavailable")
@@ -353,13 +355,13 @@ func TestManage_ReadOnlyConfig_RefusesEveryForm(t *testing.T) {
 	for name, err := range map[string]error{
 		"add repo": b.AddRepo(ctx, ui.RepoForm{Path: e.Work}),
 		"remove":   b.RemoveRepo(ctx, e.Work),
-		"account":  b.SaveAccount(ctx, ui.AccountForm{New: true, Name: "a", Provider: "github", Auth: "file", TokenFile: "/x", Root: "/r"}),
+		"account":  b.SaveAccount(ctx, ui.AccountForm{New: true, Name: "a", Provider: "github", Auth: "file", TokenFile: filepath.Join(dir, "x"), Root: filepath.Join(dir, "code")}),
 	} {
 		if err == nil || !strings.Contains(err.Error(), "read-only") {
 			t.Errorf("%s: err=%v", name, err)
 		}
 	}
-	if got, _ := os.ReadFile(real); string(got) != "[general]\nroot = \"/r\"\n" {
+	if got, _ := os.ReadFile(real); string(got) != content {
 		t.Fatalf("managed file modified: %q", got)
 	}
 }

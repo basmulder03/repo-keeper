@@ -446,7 +446,7 @@ func TestDaemon_HostileDiscovery_UnsafeURLsSkipped_SymlinkedNamespaceRefused(t *
 	<-d.Ready()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		if evs, _ := d.Store.RecentEvents(context.Background(), 50); len(evs) >= 4 {
+		if evs, _ := d.Store.RecentEvents(context.Background(), 50); len(evs) >= 5 {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)

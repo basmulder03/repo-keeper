@@ -38,6 +38,9 @@ var accountName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 
 func isLoopback(h string) bool { ip := net.ParseIP(h); return ip != nil && ip.IsLoopback() }
 
+// isAbs is a seam so tests on Windows can keep POSIX-style fixture paths; production uses the OS rule.
+var isAbs = filepath.IsAbs
+
 // Duration is a TOML-friendly time.Duration ("30m", "7d" is not supported by Go; use "168h").
 type Duration time.Duration
 
@@ -193,13 +196,13 @@ func (c Config) Validate() error {
 	if c.General.Secrets != "" && c.General.Secrets != "keyring" && c.General.Secrets != "file" {
 		bad("general.secrets %q must be keyring or file", c.General.Secrets)
 	}
-	if c.General.SecretsFile != "" && !filepath.IsAbs(c.General.SecretsFile) {
+	if c.General.SecretsFile != "" && !isAbs(c.General.SecretsFile) {
 		bad("general.secrets_file must be an absolute path")
 	}
 	if c.UI.Port < 0 || c.UI.Port > 65535 {
 		bad("ui.port must be 0..65535")
 	}
-	if c.General.Root != "" && !filepath.IsAbs(c.General.Root) {
+	if c.General.Root != "" && !isAbs(c.General.Root) {
 		bad("general.root must be an absolute path")
 	}
 	if len(c.Accounts) > 0 && c.General.Root == "" {
@@ -231,10 +234,10 @@ func (c Config) Validate() error {
 				bad("account[%d].oauth_web_url must be https://...", i)
 			}
 		}
-		if a.CAFile != "" && !filepath.IsAbs(a.CAFile) {
+		if a.CAFile != "" && !isAbs(a.CAFile) {
 			bad("account[%d].ca_file must be an absolute path", i)
 		}
-		if a.TokenFile != "" && !filepath.IsAbs(a.TokenFile) {
+		if a.TokenFile != "" && !isAbs(a.TokenFile) {
 			bad("account[%d].token_file must be an absolute path", i)
 		}
 		if a.BaseURL != "" {
@@ -262,7 +265,7 @@ func (c Config) Validate() error {
 	}
 	seen := map[string]bool{}
 	for i, r := range c.Repos {
-		if r.Path == "" || !filepath.IsAbs(r.Path) {
+		if r.Path == "" || !isAbs(r.Path) {
 			bad("repo[%d].path must be an absolute path", i)
 			continue
 		}
