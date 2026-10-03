@@ -220,3 +220,16 @@ func TestParse_SecretsBackend(t *testing.T) {
 		}
 	}
 }
+
+func TestParse_Accounts_GiteaForgejo_NeedBaseURL(t *testing.T) {
+	root := "[general]\nroot = \"/r\"\n"
+	for _, p := range []string{"gitea", "forgejo"} {
+		acct := "[[account]]\nname=\"a\"\nprovider=\"" + p + "\"\n"
+		if _, err := Parse([]byte(root + acct)); err == nil || !strings.Contains(err.Error(), "base_url is required") {
+			t.Errorf("%s without base_url: %v", p, err)
+		}
+		if _, err := Parse([]byte(root + acct + "base_url=\"https://codeberg.org\"\n")); err != nil {
+			t.Errorf("%s with base_url rejected: %v", p, err)
+		}
+	}
+}

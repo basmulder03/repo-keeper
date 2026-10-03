@@ -65,8 +65,12 @@
 - **Tactics:** honour delay headers *proactively* (ADO throttles by cost, not count); org → project → repo discovery with continuation tokens.
 
 ## Gitea / Forgejo
-- Instance-defined limits (often none): still apply global politeness rules. Token auth with `read:repository`, `read:user`, `read:organization`.
 
+**Implemented (M6, `gitea` and `forgejo` kinds; Codeberg is Forgejo).** Documented REST v1 only: `GET /user` (auth), `GET /user/repos` (discovery, `limit=50` = the default server cap, `Link` pagination), `GET /repos/{owner}/{repo}/pulls?state=closed` (merged-PR lookup: `merged`, `head.ref/sha`, head repo id must equal base repo id so forks are ignored). Token goes in `Authorization: token <t>`; git uses it as the password with user `oauth2`. `base_url` is **required** (no single public host), e.g. `https://codeberg.org`; the API path `/api/v1` is appended.
+- **Credential:** an access token with only `read:repository` (+ `read:user`). Tokens cannot report their own scopes or expiry, so `accounts check` shows the login only and a reminder to keep scopes minimal. No OAuth device flow (Gitea has none); paste a token.
+- **Limits:** instance-defined (often none); the global politeness rules (per-host pacing, `Retry-After`, backoff, breaker) still apply.
+- **Namespaces:** always `owner/name` (organisations are owners); the merged-PR lookup refuses anything else rather than guessing.
+- **Last verified:** 2026-10-03 against the API shape in fixtures only. **Not yet exercised against a live Gitea/Forgejo/Codeberg server and ToS pages not re-read for this change**; do both before promoting out of beta (tracked in OPEN-QUESTIONS).
 ## Generic git
 - User supplies URLs; no discovery, no PR data. Auth via SSH agent or credential helper-equivalent from our keychain.
 
