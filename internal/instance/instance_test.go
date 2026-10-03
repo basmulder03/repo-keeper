@@ -4,6 +4,7 @@ package instance
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -24,4 +25,23 @@ func TestAcquire_SecondFailsUntilRelease(t *testing.T) {
 	}
 	l2.Release()
 	l2.Release() // idempotent
+}
+
+func TestHolder_ReportsRunningAndPid_OnlyWhileHeld(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "d.lock")
+	if _, running := Holder(path); running {
+		t.Fatal("no lock yet")
+	}
+	l, err := Acquire(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, running := Holder(path)
+	if !running || (pid != 0 && pid != os.Getpid()) {
+		t.Fatalf("pid=%d running=%v", pid, running)
+	}
+	l.Release()
+	if _, running := Holder(path); running {
+		t.Fatal("released lock still reported as held")
+	}
 }

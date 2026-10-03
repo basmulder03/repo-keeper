@@ -155,3 +155,35 @@ func TestDaemon_RestartRequest_StopsThenReexecs_StopRequestDoesNot(t *testing.T)
 		}
 	}
 }
+
+func TestLifecycle_NoUI_StartIsReady_SecondStartAndStopAndRestartWork(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX process semantics")
+	}
+	e := gitxtest.New(t)
+	cfg, stateDir, runtimeDir := isolatedEnv(t)
+	a, out, errb := newApp(e)
+	ctx := context.Background()
+	flags := []string{"--config", cfg, "--state-dir", stateDir, "--runtime-dir", runtimeDir, "--no-ui"}
+	t.Cleanup(func() { newAppQuiet(e).run(ctx, append([]string{"stop"}, flags...)) })
+
+	if code := a.run(ctx, append([]string{"start"}, flags...)); code != 0 || !strings.Contains(out.String(), "started (pid") {
+		t.Fatalf("start without a UI must report ready: code=%d out=%s err=%s", code, out, errb)
+	}
+	out.Reset()
+	if code := a.run(ctx, append([]string{"start"}, flags...)); code != 0 || !strings.Contains(out.String(), "already running") {
+		t.Fatalf("second start must say already running, not fail: code=%d out=%s err=%s", code, out, errb)
+	}
+	out.Reset()
+	if code := a.run(ctx, append([]string{"restart"}, flags...)); code != 0 || !strings.Contains(out.String(), "started (pid") {
+		t.Fatalf("restart: code=%d out=%s err=%s", code, out, errb)
+	}
+	out.Reset()
+	if code := a.run(ctx, append([]string{"stop"}, flags...)); code != 0 || !strings.Contains(out.String(), "stopped") {
+		t.Fatalf("stop without a UI: code=%d out=%s err=%s", code, out, errb)
+	}
+	out.Reset()
+	if code := a.run(ctx, append([]string{"stop"}, flags...)); code != 0 || !strings.Contains(out.String(), "not running") {
+		t.Fatalf("stop when nothing runs: code=%d out=%s err=%s", code, out, errb)
+	}
+}

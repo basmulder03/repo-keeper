@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 // ErrRunning means another daemon already holds the lock.
@@ -39,4 +41,25 @@ func (l *Lock) Release() {
 	_ = l.f.Close()
 	_ = os.Remove(name) // best effort; the lock itself lived on the open handle
 	l.f = nil
+}
+
+// Holder reports whether a daemon holds the lock at path and, when readable, its pid (0 = unknown).
+func Holder(path string) (pid int, running bool) {
+	f, err := lockFile(path)
+	if err == nil {
+		_ = f.Close() // nobody held it; closing drops our probe lock and leaves the file alone
+		return 0, false
+	}
+	if !errors.Is(err, ErrRunning) {
+		return 0, false
+	}
+	// #nosec G304 -- our own lock path
+	b, rerr := os.ReadFile(path) //nolint:gosec // see #nosec above
+	if rerr != nil {
+		return 0, true // Windows denies reads while the lock is held
+	}
+	if n, perr := strconv.Atoi(strings.TrimSpace(string(b))); perr == nil && n > 0 {
+		pid = n
+	}
+	return pid, true
 }
