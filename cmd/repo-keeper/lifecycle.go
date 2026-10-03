@@ -91,7 +91,8 @@ func (a *app) cmdStart(ctx context.Context, args []string) int {
 		case <-time.After(100 * time.Millisecond):
 		}
 		if st, err := c.Status(ctx); err == nil {
-			_ = child.cmd.Process.Release() // let it run on its own
+			// Do not Release the process: the Wait goroutine above is still using it. This CLI exits right after, and the
+			// child (its own session leader) keeps running.
 			a.printf("started (pid %d, version %s, %d repositories)\nlog: %s\nopen the interface: repo-keeper ui\nstop it: repo-keeper stop\n%s\n",
 				child.cmd.Process.Pid, st.Version, st.Repos, logPath, lifecycleTip)
 			return 0
