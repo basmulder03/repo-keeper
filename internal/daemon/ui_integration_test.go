@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -224,7 +225,7 @@ func TestUI_EndToEnd_SyncNowConfigCleanupRestoreAuditDebug(t *testing.T) {
 	if len(hist) != 2 {
 		t.Fatalf("every change keeps a backup of the previous file: want 2, got %d", len(hist))
 	}
-	if fi, _ := os.Stat(r.cfgPath); fi.Mode().Perm() != 0o600 {
+	if fi, _ := os.Stat(r.cfgPath); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 { // Windows has no POSIX mode bits
 		t.Fatalf("config mode %v", fi.Mode().Perm())
 	}
 	if code, body := b.post("/settings/repos/remove", url.Values{"path": {e2}}); code != 200 || !strings.Contains(body, "removed from the list") {
