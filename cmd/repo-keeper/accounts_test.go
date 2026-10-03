@@ -227,7 +227,7 @@ func TestAccounts_EncryptedFileBackend_EndToEnd(t *testing.T) {
 	t.Setenv("REPO_KEEPER_PASSPHRASE_FILE", pass)
 	encPath := filepath.Join(dir, "secrets.enc")
 	body, _ := os.ReadFile(cfg)
-	_ = os.WriteFile(cfg, append(body, []byte("secrets = \"file\"\nsecrets_file = \""+encPath+"\"\n")...), 0o600)
+	_ = os.WriteFile(cfg, append(body, []byte("secrets = \"file\"\nsecrets_file = "+strconv.Quote(encPath)+"\n")...), 0o600)
 	// "secrets" keys belong to [general], which setup() already opened; the file ends inside it
 	a.in = strings.NewReader(tok + "\n")
 	ctx := context.Background()

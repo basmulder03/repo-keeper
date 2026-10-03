@@ -48,7 +48,7 @@ func startManaged(t *testing.T, cfgFmt string) *managed {
 	root := filepath.Join(t.TempDir(), "code")
 	cfg := cfgFmt
 	if strings.Contains(cfgFmt, "%q") {
-		cfg = strings.Replace(cfgFmt, "%q", `"`+root+`"`, 1)
+		cfg = strings.Replace(cfgFmt, "%q", strconv.Quote(root), 1)
 	}
 	r, b := startWithUI(t, e, cfg)
 	// credential checks queue behind the per-host rate limiter, which runs on the fake clock
