@@ -26,7 +26,7 @@ Behaviours that heuristics associate with malware: background persistence, readi
 | Packers/obfuscation | **Never** use UPX or obfuscators; ship plain, reproducible binaries |
 | Suspicious persistence | Documented, user-initiated `install-service`; visible in standard OS UIs; clean uninstall; no self-hiding |
 | Credential-store access | Only our own entries via official OS APIs; no enumeration of other apps' secrets |
-| Self-modifying/auto-update | No silent self-update; package managers update |
+| Self-modifying/auto-update | Never automatic. Package managers update their own installs; the tarball install may use the explicit, verified `repo-keeper update --apply` (ADR-0021) |
 | Downloader behaviour | No downloading/executing code at runtime; `git` is found on PATH, not fetched |
 | Unknown hash | Keep build reproducible so the same source ⇒ same hash; stable file names and version resources (company, product, description, icon) embedded in Windows PE |
 | Lack of reputation | Submit each release to Microsoft Defender (WDSI) false-positive portal pre-announcement; CI uploads to VirusTotal and fails the release checklist if > 0–2 engines flag (review manually) |
