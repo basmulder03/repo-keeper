@@ -55,4 +55,4 @@ A structured pass over the whole code base against [THREAT-MODEL](THREAT-MODEL.m
 - ~~Pin GitHub Actions by commit SHA~~ done: every action is pinned to a commit with its version in a comment; Dependabot proposes updates.
 - Run the first signed release and verify the documented `cosign` and `gh attestation` commands end to end.
 - Schedule the fuzzers in CI (`.github/workflows/fuzz.yml`, added in this milestone) and triage what they find.
-- Before implementing `update` (ADR-0021): review the signature-verification, atomic-replace and rollback code against T11, and add the architecture test that keeps the apply path unreachable from the daemon, UI and tray.
+- Before implementing `update` (ADR-0021; it must print its verification evidence and the independent verify commands, ADR-0021 point 5): review the signature-verification, atomic-replace and rollback code against T11, and add the architecture test that keeps the apply path unreachable from the daemon, UI and tray.
