@@ -12,8 +12,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
+	"github.com/basmulder03/repo-keeper/internal/config"
+	"github.com/basmulder03/repo-keeper/internal/daemon"
+	"github.com/basmulder03/repo-keeper/internal/instance"
 	"github.com/basmulder03/repo-keeper/internal/paths"
 	"github.com/basmulder03/repo-keeper/internal/tray"
 )
@@ -74,7 +78,17 @@ func (a *app) cmdStart(ctx context.Context, args []string) int {
 		a.printf("already running (version %s, %d repositories). Open the interface with: repo-keeper ui\n", st.Version, st.Repos)
 		return 0
 	}
+	_, lockPath, _ := daemon.StatePaths(lf.stateDir)
+	if pid, held := instance.Holder(lockPath); held {
+		a.printf("already running (pid %s; no web interface, so it cannot report more). Stop it with: repo-keeper stop\n", pidText(pid))
+		return 0
+	}
 	logPath := filepath.Join(lf.stateDir, "daemon.log")
+	logStart := fileSize(logPath)
+	expectUI := !lf.noUI
+	if cfg, err := config.Load(lf.configPath); err == nil {
+		expectUI = expectUI && cfg.UIEnabled()
+	}
 	child, err := a.spawnDaemon(&lf, logPath)
 	if err != nil {
 		_, _ = fmt.Fprintln(a.err, "could not start the daemon:", err)
@@ -90,16 +104,55 @@ func (a *app) cmdStart(ctx context.Context, args []string) int {
 			return 1
 		case <-time.After(100 * time.Millisecond):
 		}
-		if st, err := c.Status(ctx); err == nil {
+		_, serr := c.Status(ctx)
+		// a daemon without a web interface has no status endpoint, so its own log line is the readiness signal
+		if (expectUI && serr == nil) || (!expectUI && loggedStarted(logPath, logStart)) {
 			// Do not Release the process: the Wait goroutine above is still using it. This CLI exits right after, and the
 			// child (its own session leader) keeps running.
-			a.printf("started (pid %d, version %s, %d repositories)\nlog: %s\nopen the interface: repo-keeper ui\nstop it: repo-keeper stop\n%s\n",
-				child.cmd.Process.Pid, st.Version, st.Repos, logPath, lifecycleTip)
+			a.printf("started (pid %d)\nlog: %s\nopen the interface: repo-keeper ui (when the web interface is enabled)\nstop it: repo-keeper stop\n%s\n",
+				child.cmd.Process.Pid, logPath, lifecycleTip)
 			return 0
 		}
 	}
 	_, _ = fmt.Fprintf(a.err, "the daemon did not become ready within %s. Last log lines from %s:\n%s", startWait, logPath, tailFile(logPath, 8))
 	return 1
+}
+
+func fileSize(path string) int64 {
+	if st, err := os.Stat(path); err == nil {
+		return st.Size()
+	}
+	return 0
+}
+
+// loggedStarted reports whether the daemon wrote its "daemon started" line after offset (text or JSON log format).
+func loggedStarted(path string, offset int64) bool {
+	// #nosec G304 -- our own log
+	b, err := os.ReadFile(path) //nolint:gosec // see #nosec above
+	if err != nil || int64(len(b)) <= offset {
+		return false
+	}
+	tail := b[offset:]
+	return bytes.Contains(tail, []byte(`msg="daemon started"`)) || bytes.Contains(tail, []byte(`"msg":"daemon started"`))
+}
+
+func pidText(pid int) string {
+	if pid == 0 {
+		return "unknown"
+	}
+	return fmt.Sprint(pid)
+}
+
+// signalStop asks a daemon without a control channel to exit; it handles SIGTERM like the service manager does.
+func signalStop(pid int) error {
+	if pid <= 0 || pid == os.Getpid() {
+		return errors.New("pid unknown")
+	}
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+	return p.Signal(syscall.SIGTERM)
 }
 
 type spawned struct {
@@ -172,9 +225,12 @@ func (a *app) cmdStop(ctx context.Context, args []string) int {
 		_, _ = fmt.Fprintln(a.err, err)
 		return 1
 	}
+	if err := a.resolve(&lf.commonFlags); err != nil {
+		_, _ = fmt.Fprintln(a.err, err)
+		return 1
+	}
 	if _, err := c.Status(ctx); err != nil {
-		a.printf("not running\n")
-		return 0
+		return a.stopWithoutControl(ctx, &lf)
 	}
 	if err := c.Shutdown(ctx, false); err != nil {
 		_, _ = fmt.Fprintln(a.err, "could not ask the daemon to stop:", err)
@@ -182,6 +238,26 @@ func (a *app) cmdStop(ctx context.Context, args []string) int {
 	}
 	if !a.waitFor(ctx, stopWait, func() bool { _, err := c.Status(ctx); return errors.Is(err, tray.ErrNotRunning) }) {
 		_, _ = fmt.Fprintf(a.err, "the daemon is still running after %s (a long sync may be finishing); try again or stop the service manager unit\n", stopWait)
+		return 1
+	}
+	a.printf("stopped\n")
+	return 0
+}
+
+// stopWithoutControl handles a daemon running without a web interface: found through its instance lock, stopped by signal.
+func (a *app) stopWithoutControl(ctx context.Context, lf *lifecycleFlags) int {
+	_, lockPath, _ := daemon.StatePaths(lf.stateDir)
+	pid, held := instance.Holder(lockPath)
+	if !held {
+		a.printf("not running\n")
+		return 0
+	}
+	if err := signalStop(pid); err != nil {
+		_, _ = fmt.Fprintf(a.err, "a daemon is running (pid %s) but cannot be signalled from here (%v); stop it with your service manager or task manager\n", pidText(pid), err)
+		return 1
+	}
+	if !a.waitFor(ctx, stopWait, func() bool { _, held := instance.Holder(lockPath); return !held }) {
+		_, _ = fmt.Fprintf(a.err, "the daemon is still running after %s (a long sync may be finishing); try again\n", stopWait)
 		return 1
 	}
 	a.printf("stopped\n")
@@ -199,9 +275,19 @@ func (a *app) cmdRestart(ctx context.Context, args []string) int {
 		_, _ = fmt.Fprintln(a.err, err)
 		return 1
 	}
+	if err := a.resolve(&lf.commonFlags); err != nil {
+		_, _ = fmt.Fprintln(a.err, err)
+		return 1
+	}
 	before, rerr := c.Runtime()
 	if _, err := c.Status(ctx); err != nil || rerr != nil {
-		return a.cmdStart(ctx, args) // nothing to restart: just start
+		_, lockPath, _ := daemon.StatePaths(lf.stateDir)
+		if _, held := instance.Holder(lockPath); held { // no control channel: stop by signal, then start fresh
+			if code := a.stopWithoutControl(ctx, &lf); code != 0 {
+				return code
+			}
+		}
+		return a.cmdStart(ctx, args) // nothing (left) to restart: just start
 	}
 	if err := c.Shutdown(ctx, true); err != nil {
 		_, _ = fmt.Fprintln(a.err, "could not ask the daemon to restart:", err)

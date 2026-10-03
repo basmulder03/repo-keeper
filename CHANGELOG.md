@@ -2,7 +2,12 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
-## Unreleased
+## 0.1.0-beta.3
+
+### Fixed
+- `start` and `restart` no longer report "did not become ready" / "exited right away" for a healthy daemon that has no web interface (`--no-ui` or `[ui] enabled = false`); readiness is now taken from the daemon's own "daemon started" log line, and a second `start` says "already running".
+- `stop` (and `restart`) now work without a web interface: the daemon is found through its instance lock and asked to exit with SIGTERM.
+- The Windows CI leg passes and gates merges again (test-only fixes).
 
 ### Added
 - **Gitea and Forgejo support** (`provider = "gitea"` / `"forgejo"`, incl. Codeberg): discovery, clone, fast-forward and safe cleanup via merged-PR lookup. `base_url` is required. Tested against fixtures only so far; see docs/PROVIDERS.md.
