@@ -77,8 +77,8 @@ type General struct {
 
 // Cleanup is the global branch-cleanup policy.
 type Cleanup struct {
-	Mode             string   `toml:"mode,omitempty"` // off | dry-run | auto
-	MinAge           Duration `toml:"min_age,omitempty"`
+	Mode             string   `toml:"mode,omitempty"`                    // off | dry-run | auto
+	MinAge           Duration `toml:"min_age,omitempty" render:"always"` // 0 is meaningful here (the default is 7d), so it is always written
 	Protected        []string `toml:"protected,omitempty"`
 	AllowNeverPushed bool     `toml:"allow_never_pushed,omitempty"`
 }

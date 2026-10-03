@@ -130,7 +130,7 @@ func (s *Server) parseTemplates() error {
 	if err != nil {
 		return err
 	}
-	pages := []string{"dashboard", "repo", "accounts", "cleanup", "audit", "config", "debug", "error"}
+	pages := []string{"dashboard", "repo", "accounts", "cleanup", "audit", "config", "debug", "error", "settings", "account_form", "device"}
 	s.pages = map[string]*template.Template{}
 	for _, p := range pages {
 		t, err := template.New("layout.html").Funcs(funcs()).ParseFS(sub, "layout.html", "fragments.html", p+".html")
@@ -189,7 +189,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /cleanup", s.authed(s.handleCleanup))
 	mux.HandleFunc("GET /audit", s.authed(s.handleAudit))
 	mux.HandleFunc("GET /config", s.authed(s.handleConfig))
-	mux.HandleFunc("POST /config", s.authed(s.handleConfigSave))
+	s.manageRoutes(mux)
 	mux.HandleFunc("GET /debug", s.authed(s.handleDebug))
 	mux.HandleFunc("GET /debug/bundle.json", s.authed(s.handleBundle))
 	mux.HandleFunc("POST /logout", s.authed(s.handleLogout))

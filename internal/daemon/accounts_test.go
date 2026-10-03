@@ -23,11 +23,13 @@ import (
 const ghToken = "ghp_CANARYtokenValue0123456789abcdef"
 
 type fakeGH struct {
-	mu     sync.Mutex
-	repos  []map[string]any
-	status int // when non-zero every request answers with it
-	prs    string
-	hits   int
+	mu            sync.Mutex
+	devicePending int
+	deviceDenied  bool
+	repos         []map[string]any
+	status        int // when non-zero every request answers with it
+	prs           string
+	hits          int
 }
 
 func (f *fakeGH) set(repos ...map[string]any) {
@@ -40,6 +42,23 @@ func (f *fakeGH) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.hits++
+	switch r.URL.Path { // OAuth device flow endpoints (no bearer token: these are what obtains one)
+	case "/login/device/code":
+		_, _ = fmt.Fprintf(w, `{"device_code":"dc-1","user_code":"WDJB-MJHT","verification_uri":"https://github.com/login/device","expires_in":900,"interval":5}`)
+		return
+	case "/login/oauth/access_token":
+		_ = r.ParseForm()
+		switch {
+		case f.deviceDenied:
+			_, _ = w.Write([]byte(`{"error":"access_denied"}`))
+		case f.devicePending > 0:
+			f.devicePending--
+			_, _ = w.Write([]byte(`{"error":"authorization_pending"}`))
+		default:
+			_, _ = fmt.Fprintf(w, `{"access_token":%q}`, ghToken)
+		}
+		return
+	}
 	if f.status != 0 {
 		w.WriteHeader(f.status)
 		_, _ = w.Write([]byte(`{"message":"Bad credentials"}`))

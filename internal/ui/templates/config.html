@@ -1,13 +1,5 @@
 {{define "content"}}
-<h1>Configuration</h1>
-<p class="muted">The file is validated before it is saved, the previous version is kept (last 10), and the daemon applies it without a restart. It never contains secrets. A changed UI port or concurrency needs a restart.</p>
-{{if .D.ReadOnly}}<p class="flash err" role="status">Read-only: {{.D.ReadOnly}}.</p>{{end}}
-{{if .D.Errors}}<ul class="errors" role="alert">{{range .D.Errors}}<li>{{.}}</li>{{end}}</ul>{{end}}
-<form method="post" action="/config">
-  {{template "csrf" $}}
-  <input type="hidden" name="version" value="{{.D.Version}}">
-  <label for="text" class="muted">config.toml</label>
-  <textarea id="text" name="text" class="mono" spellcheck="false" autocomplete="off"{{if .D.ReadOnly}} readonly{{end}}>{{.D.Text}}</textarea>
-  {{if not .D.ReadOnly}}<p><button class="primary" type="submit">Validate and save</button></p>{{end}}
-</form>
+<h1>Configuration file</h1>
+<p class="muted">Read-only view of <code>{{.D.Path}}</code>. Change it from <a href="/settings">Settings</a> and <a href="/accounts">Accounts</a>; those forms keep your comments and write a backup of the previous version (last 10) each time. The file never contains secrets.</p>
+<pre>{{.D.Text}}</pre>
 {{end}}

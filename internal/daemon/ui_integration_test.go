@@ -19,6 +19,7 @@ import (
 
 	"github.com/basmulder03/repo-keeper/internal/clock"
 	"github.com/basmulder03/repo-keeper/internal/gitxtest"
+	"github.com/basmulder03/repo-keeper/internal/secrets"
 	"github.com/basmulder03/repo-keeper/internal/ui"
 )
 
@@ -39,7 +40,8 @@ func startWithUI(t *testing.T, e *gitxtest.Env, cfg string) (*rig, *browserSessi
 	r := &rig{e: e, clk: clock.NewFake(time.Now()), cfgPath: filepath.Join(dir, "config.toml"), done: make(chan error, 1)}
 	writeCfg(t, r.cfgPath, cfg)
 	runtimeDir := filepath.Join(dir, "run")
-	r.d = &Daemon{ConfigPath: r.cfgPath, StateDir: filepath.Join(dir, "state"), Runner: e.R, Clock: r.clk, Tick: time.Minute,
+	r.secrets = &secrets.Mem{}
+	r.d = &Daemon{ConfigPath: r.cfgPath, StateDir: filepath.Join(dir, "state"), Runner: e.R, Clock: r.clk, Tick: time.Minute, Secrets: r.secrets,
 		EphemeralUI: true, RuntimeDir: runtimeDir, Version: "test", AllowLocalCloneURLs: true}
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
@@ -184,33 +186,52 @@ func TestUI_EndToEnd_SyncNowConfigCleanupRestoreAuditDebug(t *testing.T) {
 		t.Fatalf("bundle invalid: %v\n%.300s", err, raw)
 	}
 
-	// config editing: invalid is rejected with reasons, valid is applied by the running daemon
-	_, page := b.get("/config")
-	if !strings.Contains(page, "min_age") {
-		t.Fatalf("config page: %.400s", page)
+	// settings forms: a bad value is rejected with the reason, a good one is applied by the running daemon, and the
+	// hand-written comments in the file survive
+	_, page := b.get("/settings")
+	if !strings.Contains(page, "Save settings") || !strings.Contains(page, `name="interval"`) {
+		t.Fatalf("settings page: %.400s", page)
 	}
-	ver := regexp.MustCompile(`name="version" value="([^"]+)"`).FindStringSubmatch(page)[1]
-	code, body = b.post("/config", url.Values{"version": {ver}, "text": {"[general]\ninterval = \"1m\"\n"}})
+	settings := url.Values{"root": {""}, "interval": {"1m"}, "concurrency": {"4"}, "per_host": {"2"}, "all_branches": {"on"}, "secrets": {"keyring"},
+		"cleanup_mode": {"dry-run"}, "min_age": {"0s"}, "protected": {"main"}, "ui_enabled": {"on"}, "ui_port": {"7878"}}
+	code, body = b.post("/settings", settings)
 	if code != http.StatusUnprocessableEntity || !strings.Contains(body, "below the 5m0s minimum") {
-		t.Fatalf("invalid config: %d\n%.500s", code, body)
+		t.Fatalf("invalid interval: %d\n%.500s", code, body)
 	}
+	settings.Set("interval", "45m")
+	if code, body := b.post("/settings", settings); code != 200 || !strings.Contains(body, "Settings saved") {
+		if i := strings.Index(body, `class="errors"`); i >= 0 {
+			body = body[i:]
+		}
+		t.Fatalf("save: %d\n%.700s", code, body)
+	}
+	text, _ := os.ReadFile(r.cfgPath)
+	if !strings.Contains(string(text), `interval = "45m"`) || !strings.Contains(string(text), "[[repo]]") {
+		t.Fatalf("settings not applied or repo lost:\n%s", text)
+	}
+
+	// repositories: add a clone through the form; bad path is explained
 	e2 := e.Clone("second")
-	newCfg := cfg + "[[repo]]\npath = \"" + e2 + "\"\n"
-	if code, body := b.post("/config", url.Values{"version": {ver}, "text": {newCfg}}); code != 200 || !strings.Contains(body, "Configuration saved") {
-		t.Fatalf("save: %d\n%.500s", code, body)
+	if code, body := b.post("/settings/repos", url.Values{"path": {filepath.Join(e.Root, "not-a-repo")}}); code != http.StatusUnprocessableEntity || !strings.Contains(body, "not a git repository") {
+		t.Fatalf("bad path: %d\n%.500s", code, body)
 	}
-	r.clk.BlockUntil(3, time.Second)
-	r.waitFor(t, "second repo tracked after UI save", func() bool { return len(r.repos(t)) == 2 })
+	if code, body := b.post("/settings/repos", url.Values{"path": {e2}, "cleanup_mode": {"off"}}); code != 200 || !strings.Contains(body, "Repository added") {
+		t.Fatalf("add repo: %d\n%.500s", code, body)
+	}
+	r.advance(time.Second)
+	r.waitFor(t, "second repo tracked after the form", func() bool { return len(r.repos(t)) == 2 })
 	hist, _ := os.ReadDir(filepath.Join(r.d.StateDir, "config-history"))
-	if len(hist) != 1 {
-		t.Fatalf("expected one archived config, got %d", len(hist))
-	}
-	// the same (now stale) version must be refused instead of silently overwriting
-	if code, body := b.post("/config", url.Values{"version": {ver}, "text": {cfg}}); code != http.StatusUnprocessableEntity || !strings.Contains(body, "changed on disk") {
-		t.Fatalf("stale save: %d\n%.500s", code, body)
+	if len(hist) != 2 {
+		t.Fatalf("every change keeps a backup of the previous file: want 2, got %d", len(hist))
 	}
 	if fi, _ := os.Stat(r.cfgPath); fi.Mode().Perm() != 0o600 {
 		t.Fatalf("config mode %v", fi.Mode().Perm())
+	}
+	if code, body := b.post("/settings/repos/remove", url.Values{"path": {e2}}); code != 200 || !strings.Contains(body, "removed from the list") {
+		t.Fatalf("remove repo: %d\n%.500s", code, body)
+	}
+	if _, err := os.Stat(filepath.Join(e2, ".git")); err != nil {
+		t.Fatal("removing a repo from the list must never touch the clone")
 	}
 }
 
@@ -297,10 +318,10 @@ func TestUI_ConfigSymlink_IsReadOnly(t *testing.T) {
 	d := &Daemon{ConfigPath: link, StateDir: filepath.Join(dir, "state"), Runner: e.R}
 	d.Clock = clock.Real{}
 	b := uiBackend{d}
-	if why := b.ConfigReadOnly(); !strings.Contains(why, "managed.toml") {
+	if why := d.configReadOnly(); !strings.Contains(why, "managed.toml") {
 		t.Fatalf("why=%q", why)
 	}
-	if err := b.SaveConfig(context.Background(), "[general]\ninterval = \"1h\"\n", ""); err == nil || !strings.Contains(err.Error(), "read-only") {
+	if _, err := b.SaveSettings(context.Background(), ui.SettingsForm{Root: "/r", Interval: "1h", Concurrency: "4", PerHost: "2", CleanupMode: "off", MinAge: "7d", UIPort: "7878"}); err == nil || !strings.Contains(err.Error(), "read-only") {
 		t.Fatalf("err=%v", err)
 	}
 	if fi, _ := os.Lstat(link); fi.Mode()&os.ModeSymlink == 0 {
@@ -311,7 +332,7 @@ func TestUI_ConfigSymlink_IsReadOnly(t *testing.T) {
 	}
 	plain := filepath.Join(dir, "plain.toml")
 	writeCfg(t, plain, "")
-	if (uiBackend{&Daemon{ConfigPath: plain}}).ConfigReadOnly() != "" {
+	if (&Daemon{ConfigPath: plain}).configReadOnly() != "" {
 		t.Fatal("a regular file must be editable")
 	}
 }

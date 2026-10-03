@@ -12,7 +12,9 @@ All notable changes are listed here. Versions follow [SemVer](https://semver.org
 ### Added
 - **Run the daemon detached, no service manager needed:** `repo-keeper start`, `stop` and `restart` (restart re-executes in place, same PID, so it also works under systemd). Logs go to `<state dir>/daemon.log` (private, size-capped).
 - **Daemon controls in the UI** (Debug page): restart and stop.
-- Config editing groundwork: a comment-preserving TOML block editor (used by the upcoming account and settings forms).
+- **Everything is configurable from the web UI, with forms instead of a raw TOML editor:** Settings (clone folder, intervals, cleanup policy, UI), add/edit/remove accounts, add/remove single repositories. Pasted tokens are verified against the platform before anything is saved and go to the secret store, never the config file. Edits keep your comments and write a timestamped backup first. The config page is now a read-only view. Generated (Nix) or symlinked configs stay read-only by design.
+- **GitHub device-code sign-in from the UI** ("Sign in with GitHub" on the account form): shows the code and link, waits for approval, then stores the token. Removing an account never deletes cloned repositories; it can also forget the stored token.
+- Removed accounts are forgotten by the daemon (repos deactivated, saved state dropped) on reload.
 
 ## 0.1.0-beta.1 (first beta)
 

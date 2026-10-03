@@ -1,0 +1,89 @@
+{{define "content"}}
+<h1>Settings</h1>
+{{if .D.ReadOnly}}<p class="flash err" role="status">Read-only: {{.D.ReadOnly}}.</p>{{end}}
+{{if .D.Problems}}<ul class="errors" role="alert">{{range .D.Problems}}<li>{{.}}</li>{{end}}</ul>{{end}}
+
+<form method="post" action="/settings">
+{{template "csrf" $}}
+{{with .D.Form}}
+<fieldset class="panel" {{if $.D.ReadOnly}}disabled{{end}}>
+  <legend>General</legend>
+  <p><label for="root">Clone folder</label><br>
+    <input id="root" name="root" type="text" size="60" value="{{.Root}}" placeholder="/home/you/code" autocomplete="off">
+    <span class="muted"><br>Repositories found through your accounts are cloned beneath this folder (absolute path).</span></p>
+  <p><label for="interval">Sync every</label>
+    <input id="interval" name="interval" type="text" size="8" value="{{.Interval}}"> <span class="muted">e.g. 30m, 1h (minimum 5m)</span></p>
+  <p><label for="concurrency">Parallel syncs</label>
+    <input id="concurrency" name="concurrency" type="text" size="4" value="{{.Concurrency}}">
+    <label for="per_host">per host</label>
+    <input id="per_host" name="per_host" type="text" size="4" value="{{.PerHost}}">
+    <span class="muted">(applied after a restart)</span></p>
+  <p><label for="quiet_hours">Quiet hours</label>
+    <input id="quiet_hours" name="quiet_hours" type="text" size="14" value="{{.QuietHours}}" placeholder="23:00-07:00">
+    <span class="muted">no scheduled syncs in this daily window; leave empty for none</span></p>
+  <p><label><input type="checkbox" name="all_branches"{{if .AllBranches}} checked{{end}}> Fetch all branches (otherwise only the default branch)</label></p>
+  <p><label for="secrets">Where tokens are stored</label>
+    <select id="secrets" name="secrets">
+      <option value="keyring"{{if eq .Secrets "keyring"}} selected{{end}}>OS keychain</option>
+      <option value="file"{{if eq .Secrets "file"}} selected{{end}}>Encrypted file (headless hosts)</option>
+    </select>
+    <label for="secrets_file">file</label>
+    <input id="secrets_file" name="secrets_file" type="text" size="40" value="{{.SecretsFile}}" placeholder="default: state folder / secrets.enc">
+    <span class="muted"><br>The encrypted file needs <code>REPO_KEEPER_PASSPHRASE_FILE</code> set for the daemon. Applied after a restart.</span></p>
+</fieldset>
+
+<fieldset class="panel" {{if $.D.ReadOnly}}disabled{{end}}>
+  <legend>Branch cleanup (local branches only)</legend>
+  <p><label for="cleanup_mode">Mode</label>
+    <select id="cleanup_mode" name="cleanup_mode">
+      <option value="off"{{if eq .CleanupMode "off"}} selected{{end}}>Off</option>
+      <option value="dry-run"{{if eq .CleanupMode "dry-run"}} selected{{end}}>Dry run: only report what would be deleted</option>
+      <option value="auto"{{if eq .CleanupMode "auto"}} selected{{end}}>Automatic: delete safely merged branches (undo for 30 days)</option>
+    </select></p>
+  <p><label for="min_age">Never delete branches younger than</label>
+    <input id="min_age" name="min_age" type="text" size="8" value="{{.MinAge}}"> <span class="muted">e.g. 7d, 168h</span></p>
+  <p><label for="protected">Protected branches</label><br>
+    <textarea id="protected" name="protected" rows="6" cols="30" spellcheck="false">{{.Protected}}</textarea>
+    <span class="muted"><br>One pattern per line; <code>*</code> matches within a name, e.g. <code>release/*</code>.</span></p>
+  <p><label><input type="checkbox" name="allow_never_pushed"{{if .AllowNeverPushed}} checked{{end}}> Also delete merged branches that were never pushed (off is safer: a brand-new empty branch looks merged)</label></p>
+</fieldset>
+
+<fieldset class="panel" {{if $.D.ReadOnly}}disabled{{end}}>
+  <legend>This interface</legend>
+  <p><label><input type="checkbox" name="ui_enabled"{{if .UIEnabled}} checked{{end}}> Serve the web interface</label>
+    <label for="ui_port">on port</label>
+    <input id="ui_port" name="ui_port" type="text" size="6" value="{{.UIPort}}">
+    <span class="muted">(127.0.0.1 only; a free port is used if taken; applied after a restart)</span></p>
+</fieldset>
+{{end}}
+{{if not .D.ReadOnly}}<p><button class="primary" type="submit">Save settings</button></p>{{end}}
+</form>
+
+<h2>Repositories listed directly</h2>
+<p class="muted">Repositories that are not part of an account (for example a clone you already have). Accounts discover their own on the <a href="/accounts">Accounts</a> page.</p>
+{{if .D.RepoProblems}}<ul class="errors" role="alert">{{range .D.RepoProblems}}<li>{{.}}</li>{{end}}</ul>{{end}}
+<div class="panel">
+<table>
+  <thead><tr><th scope="col">Path</th><th scope="col">Cleanup</th><th scope="col">Every</th><th scope="col"><span class="muted">Action</span></th></tr></thead>
+  <tbody>
+  {{range .D.Repos}}<tr><td><code>{{.Path}}</code></td><td>{{if .CleanupMode}}{{.CleanupMode}}{{else}}default{{end}}</td><td>{{if .Interval}}{{.Interval}}{{else}}default{{end}}</td>
+    <td>{{if not $.D.ReadOnly}}<form class="inline" method="post" action="/settings/repos/remove" data-confirm="Stop syncing this repository? The clone on disk is not touched.">{{template "csrf" $}}<input type="hidden" name="path" value="{{.Path}}"><button type="submit">Remove</button></form>{{end}}</td></tr>
+  {{else}}<tr><td colspan="4" class="muted">None.</td></tr>{{end}}
+  </tbody>
+</table>
+{{if not .D.ReadOnly}}
+<form method="post" action="/settings/repos">
+  {{template "csrf" $}}
+  <p><label for="rpath">Add a clone</label><br>
+    <input id="rpath" name="path" type="text" size="60" value="{{.D.RepoForm.Path}}" placeholder="/home/you/code/project" autocomplete="off">
+    <label for="rclean">cleanup</label>
+    <select id="rclean" name="cleanup_mode">
+      <option value="">default</option><option value="off">off</option><option value="dry-run">dry-run</option><option value="auto">auto</option>
+    </select>
+    <button type="submit">Add</button></p>
+</form>
+{{end}}
+</div>
+
+<p><a href="/config">View the configuration file</a> <span class="muted">(read-only; everything above changes it for you)</span></p>
+{{end}}

@@ -35,10 +35,9 @@ const (
 type fake struct {
 	mu         sync.Mutex
 	calls      []string
-	saveErr    error
 	restoreEr  error
 	cleanupErr error
-	readOnly   string
+	m          *manageState
 	report     cleanup.Report
 }
 
@@ -141,12 +140,7 @@ func (f *fake) Restore(_ context.Context, _ int64, b string) error {
 	f.rec("restore:" + b)
 	return f.restoreEr
 }
-func (f *fake) ConfigReadOnly() string          { return f.readOnly }
-func (f *fake) Config() (string, string, error) { return "[general]\n# " + xss + "\n", "v1", nil }
-func (f *fake) SaveConfig(_ context.Context, text, ver string) error {
-	f.rec("save:" + ver + ":" + strings.TrimSpace(text))
-	return f.saveErr
-}
+func (f *fake) Config() (string, error)                { return "[general]\n# " + xss + "\n", nil }
 func (f *fake) Bundle(context.Context) ([]byte, error) { return []byte(`{"ok":true}`), nil }
 
 type env struct {
@@ -159,7 +153,7 @@ type env struct {
 
 func newEnv(t testing.TB) *env {
 	t.Helper()
-	b := &fake{report: cleanup.Report{Mode: "dry-run", Items: []cleanup.Item{{Branch: "feat/" + xss, SHA: "abcdef0123456789", Outcome: cleanup.WouldDelete, Reason: cleanup.DeleteMerged}}}}
+	b := &fake{m: newManageState(), report: cleanup.Report{Mode: "dry-run", Items: []cleanup.Item{{Branch: "feat/" + xss, SHA: "abcdef0123456789", Outcome: cleanup.WouldDelete, Reason: cleanup.DeleteMerged}}}}
 	clk := clock.NewFake(time.Now())
 	s := &Server{Backend: b, Clock: clk, Version: "1.2.3"}
 	if err := s.Prepare(addr); err != nil {
@@ -290,7 +284,7 @@ func TestEveryPage_RequiresSession(t *testing.T) {
 			t.Errorf("GET %s => %d", p, w.Code)
 		}
 	}
-	for _, p := range []string{"/repos/1/sync", "/repos/1/cleanup", "/repos/1/restore", "/accounts/gh/discover", "/config", "/logout"} {
+	for _, p := range []string{"/repos/1/sync", "/repos/1/cleanup", "/repos/1/restore", "/accounts/gh/discover", "/settings", "/logout"} {
 		if w := e.do(http.MethodPost, p, url.Values{"csrf": {"x"}}); w.Code != http.StatusUnauthorized {
 			t.Errorf("POST %s => %d", p, w.Code)
 		}
@@ -411,7 +405,10 @@ func TestPages_RenderAndEscapeHostileData(t *testing.T) {
 		"/accounts":            {[]string{"auth-failed", "octo", "broad scope", "API rate limits"}, true, true},
 		"/cleanup":             {[]string{"Cleanup review", "dry-run", "would-delete"}, true, false},
 		"/audit":               {[]string{"Audit journal", "deleted", "merged-into-default", "abcdef0123"}, true, false},
-		"/config":              {[]string{"Validate and save", "textarea"}, true, true},
+		"/config":              {[]string{"Configuration file", "<pre>", "Settings"}, true, false},
+		"/settings":            {[]string{"Settings", "Save settings", "Clone folder", "Protected branches", "Add a clone"}, true, true},
+		"/accounts/new":        {[]string{"Add account", "Paste an access token", "device code", "Which repositories"}, false, true},
+		"/accounts/gh/edit":    {[]string{"Edit account", "Keep the current credential", "Save account"}, false, true},
 		"/debug":               {[]string{"git fetch --prune", "2.50.0", "Download diagnostics bundle", "Restart daemon", "Stop daemon", "/daemon/restart"}, true, true},
 		"/fragments/dashboard": {[]string{"Repositories", "Remote hosts"}, true, true},
 	}
@@ -490,28 +487,6 @@ func TestActions_SyncCleanupRestore_Redirects(t *testing.T) {
 		if w := e.do(http.MethodGet, p, nil, cookie(c)); w.Code != 404 {
 			t.Errorf("GET %s => %d", p, w.Code)
 		}
-	}
-}
-
-func TestConfig_SaveValidationConflictAndSuccess(t *testing.T) {
-	e := newEnv(t)
-	c, csrf := e.login()
-	e.b.saveErr = errors.New("general.interval 1m0s is below the 5m0s minimum\ncleanup.mode \"x\" must be off, dry-run or auto")
-	w := e.do(http.MethodPost, "/config", url.Values{"csrf": {csrf}, "version": {"v1"}, "text": {"[general]\ninterval=\"1m\"\r\n"}}, cookie(c))
-	body := w.Body.String()
-	if w.Code != http.StatusUnprocessableEntity || !strings.Contains(body, "below the 5m0s minimum") || !strings.Contains(body, "must be off") || !strings.Contains(body, `interval=&#34;1m&#34;`) {
-		t.Fatalf("code=%d body=%s", w.Code, body)
-	}
-	if !e.b.called(`save:v1:[general]` + "\n" + `interval="1m"`) {
-		t.Fatalf("calls=%v (CRLF must be normalised)", e.b.calls)
-	}
-	e.b.saveErr = nil
-	if w := e.do(http.MethodPost, "/config", url.Values{"csrf": {csrf}, "version": {"v1"}, "text": {"[general]"}}, cookie(c)); w.Code != 303 || w.Header().Get("Location") != "/config?m=config-saved" {
-		t.Fatalf("save: %d %q", w.Code, w.Header().Get("Location"))
-	}
-	huge := strings.Repeat("a", maxConfigSize+1)
-	if w := e.do(http.MethodPost, "/config", url.Values{"csrf": {csrf}, "text": {huge}}, cookie(c)); w.Code < 400 {
-		t.Fatalf("oversized config accepted: %d", w.Code)
 	}
 }
 
@@ -674,25 +649,6 @@ func TestMachineAPI_StatusAndActions(t *testing.T) {
 	// foreign origins cannot drive it even with a leaked token (browsers can't set Authorization cross-origin anyway)
 	if w := e.do(http.MethodPost, "/api/pause", nil, auth, hdr("Origin", "http://evil.example")); w.Code != http.StatusForbidden {
 		t.Errorf("cross-origin => %d", w.Code)
-	}
-}
-
-func TestConfig_ReadOnly_ShownAndSaveRefused(t *testing.T) {
-	e := newEnv(t)
-	c, csrf := e.login()
-	e.b.readOnly = "managed by Home Manager"
-	body := e.do(http.MethodGet, "/config", nil, cookie(c)).Body.String()
-	if !strings.Contains(body, "Read-only: managed by Home Manager") || !strings.Contains(body, " readonly") || strings.Contains(body, "Validate and save") {
-		t.Fatalf("page must explain and disable editing:\n%s", body)
-	}
-	w := e.do(http.MethodPost, "/config", url.Values{"csrf": {csrf}, "version": {"v1"}, "text": {"[general]"}}, cookie(c))
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("save must be refused, got %d", w.Code)
-	}
-	for _, call := range e.b.calls {
-		if strings.HasPrefix(call, "save:") {
-			t.Fatal("backend save reached despite read-only config")
-		}
 	}
 }
 

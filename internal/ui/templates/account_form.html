@@ -1,0 +1,91 @@
+{{define "content"}}
+{{with .D}}
+<h1>{{if .Edit}}Edit account <code>{{.Form.Name}}</code>{{else}}Add account{{end}}</h1>
+{{if .Problems}}<ul class="errors" role="alert">{{range .Problems}}<li>{{.}}</li>{{end}}</ul>{{end}}
+
+<form method="post" action="{{if .Edit}}/accounts/{{.Form.Name}}{{else}}/accounts{{end}}" autocomplete="off">
+{{template "csrf" $}}
+
+<fieldset class="panel">
+  <legend>Account</legend>
+  {{if not .Edit}}
+  <p><label for="name">Name</label>
+    <input id="name" name="name" type="text" size="20" value="{{.Form.Name}}" placeholder="personal" required pattern="[a-z0-9][a-z0-9_\-]*">
+    <span class="muted">lowercase letters, digits, dashes; just a label</span></p>
+  {{end}}
+  <p><label for="provider">Platform</label>
+    <select id="provider" name="provider"{{if .Edit}} disabled{{end}}>
+      {{range .Provs}}<option value="{{.}}"{{if eq . $.D.Form.Provider}} selected{{end}}>{{.}}</option>{{end}}
+    </select>
+    {{if .Edit}}<input type="hidden" name="provider" value="{{.Form.Provider}}">{{end}}</p>
+  <p><label for="base_url">Server address</label>
+    <input id="base_url" name="base_url" type="text" size="50" value="{{.Form.BaseURL}}" placeholder="leave empty for github.com / gitlab.com">
+    <span class="muted"><br>Self-hosted: GitHub Enterprise <code>https://ghe.example.com/api/v3</code>, GitLab <code>https://gitlab.example.com</code>.</span></p>
+</fieldset>
+
+<fieldset class="panel">
+  <legend>How repo-keeper signs in</legend>
+  <p class="muted">Use the narrowest, read-only credential: a fine-grained GitHub token (Contents, Metadata, Pull requests: read) or a GitLab access token with <code>read_api</code> + <code>read_repository</code>. It is checked before anything is saved and kept in your secret store, never in the config file.</p>
+  {{if .Edit}}<p><label><input type="radio" name="auth" value="keep"{{if eq .Form.Auth "keep"}} checked{{end}}> Keep the current credential{{if .Form.TokenFile}} (file <code>{{.Form.TokenFile}}</code>){{else if .Form.TokenEnv}} (variable <code>{{.Form.TokenEnv}}</code>){{end}}</label></p>{{end}}
+  <p><label><input type="radio" name="auth" value="token"{{if eq .Form.Auth "token"}} checked{{end}}> Paste an access token</label><br>
+    <input id="token" name="token" type="password" size="50" value="" aria-label="Access token" autocomplete="new-password" placeholder="{{if .Edit}}paste a new token to replace the stored one{{else}}ghp_... or glpat-...{{end}}"></p>
+  <p><label><input type="radio" name="auth" value="device"{{if eq .Form.Auth "device"}} checked{{end}}> Sign in with GitHub (device code, GitHub only)</label><br>
+    <label for="client_id">Client ID</label>
+    <input id="client_id" name="client_id" type="text" size="26" value="{{.Form.ClientID}}" placeholder="Iv1.0123456789abcdef">
+    <label for="web_url">GitHub Enterprise web address</label>
+    <input id="web_url" name="web_url" type="text" size="30" value="{{.Form.WebURL}}" placeholder="https://ghe.example.com (optional)">
+    <span class="muted"><br>The client ID of a GitHub App (device flow enabled, read-only permissions) or an OAuth App that you registered; no secret is needed. Disable token expiry on a GitHub App, because refreshing would need a secret.</span></p>
+  <p><label><input type="radio" name="auth" value="file"{{if eq .Form.Auth "file"}} checked{{end}}> Read the token from a file</label><br>
+    <input name="token_file" type="text" size="50" value="{{.Form.TokenFile}}" aria-label="Token file path" placeholder="/run/secrets/github-token (mode 600)"></p>
+  <p><label><input type="radio" name="auth" value="env"{{if eq .Form.Auth "env"}} checked{{end}}> Read the token from an environment variable of the daemon</label><br>
+    <input name="token_env" type="text" size="30" value="{{.Form.TokenEnv}}" aria-label="Environment variable name" placeholder="GITHUB_TOKEN"></p>
+</fieldset>
+
+<fieldset class="panel">
+  <legend>Which repositories</legend>
+  <p><label for="include">Include</label><br>
+    <textarea id="include" name="include" rows="4" cols="40" spellcheck="false" placeholder="me/*&#10;my-org/**">{{.Form.Include}}</textarea>
+    <label for="exclude">Exclude</label><br>
+    <textarea id="exclude" name="exclude" rows="4" cols="40" spellcheck="false" placeholder="*/archive-*">{{.Form.Exclude}}</textarea>
+    <span class="muted"><br>One pattern per line on <code>owner/name</code>. <code>*</code> stays within one level, <code>**</code> crosses levels (GitLab subgroups). Empty include means everything you can access.</span></p>
+  <p><label><input type="checkbox" name="skip_archived"{{if .Form.SkipArchived}} checked{{end}}> Skip archived repositories</label>
+     <label><input type="checkbox" name="skip_forks"{{if .Form.SkipForks}} checked{{end}}> Skip forks</label></p>
+</fieldset>
+
+{{if .NeedRoot}}
+<fieldset class="panel">
+  <legend>Clone folder (needed once)</legend>
+  <p><label for="root">Clone repositories into</label>
+    <input id="root" name="root" type="text" size="50" value="{{.Form.Root}}" placeholder="/home/you/code" required></p>
+</fieldset>
+{{else}}<input type="hidden" name="root" value="{{.Form.Root}}">{{end}}
+
+<details class="panel">
+  <summary>Advanced</summary>
+  <p><label for="clone_protocol">Clone over</label>
+    <select id="clone_protocol" name="clone_protocol">
+      <option value=""{{if eq .Form.CloneProtocol ""}} selected{{end}}>HTTPS (default)</option>
+      <option value="ssh"{{if eq .Form.CloneProtocol "ssh"}} selected{{end}}>SSH (uses your ssh-agent)</option>
+    </select>
+    <label><input type="checkbox" name="partial_clone"{{if .Form.PartialClone}} checked{{end}}> Blobless clones (smaller, fetch file contents on demand)</label></p>
+  <p><label for="discovery_interval">List repositories every</label>
+    <input id="discovery_interval" name="discovery_interval" type="text" size="8" value="{{.Form.DiscoveryInterval}}" placeholder="6h">
+    <label for="interval">sync every</label>
+    <input id="interval" name="interval" type="text" size="8" value="{{.Form.Interval}}" placeholder="general default">
+    <label for="cleanup_mode">cleanup</label>
+    <select id="cleanup_mode" name="cleanup_mode">
+      <option value=""{{if eq .Form.CleanupMode ""}} selected{{end}}>general default</option>
+      <option value="off"{{if eq .Form.CleanupMode "off"}} selected{{end}}>off</option>
+      <option value="dry-run"{{if eq .Form.CleanupMode "dry-run"}} selected{{end}}>dry-run</option>
+      <option value="auto"{{if eq .Form.CleanupMode "auto"}} selected{{end}}>auto</option></select></p>
+  <p><label for="ca_file">Private CA bundle (self-hosted servers)</label>
+    <input id="ca_file" name="ca_file" type="text" size="40" value="{{.Form.CAFile}}" placeholder="/etc/ssl/my-company-ca.pem">
+    <label for="scope">OAuth scope (OAuth Apps only)</label>
+    <input id="scope" name="scope" type="text" size="14" value="{{.Form.Scope}}" placeholder="leave empty for GitHub Apps"></p>
+</details>
+
+<p><button class="primary" type="submit">{{if .Edit}}Save account{{else}}Add account{{end}}</button>
+   <a class="btn" href="/accounts">Cancel</a></p>
+</form>
+{{end}}
+{{end}}

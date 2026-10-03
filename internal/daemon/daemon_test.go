@@ -16,6 +16,7 @@ import (
 	"github.com/basmulder03/repo-keeper/internal/gitxtest"
 	"github.com/basmulder03/repo-keeper/internal/instance"
 	"github.com/basmulder03/repo-keeper/internal/sched"
+	"github.com/basmulder03/repo-keeper/internal/secrets"
 	"github.com/basmulder03/repo-keeper/internal/store"
 	"github.com/basmulder03/repo-keeper/internal/syncer"
 )
@@ -73,6 +74,7 @@ type rig struct {
 	clk     *clock.Fake
 	d       *Daemon
 	cfgPath string
+	secrets *secrets.Mem
 	cancel  context.CancelFunc
 	done    chan error
 }
@@ -98,7 +100,8 @@ func start(t *testing.T, e *gitxtest.Env, cfg string) *rig {
 	dir := t.TempDir()
 	r := &rig{e: e, clk: clock.NewFake(time.Now()), cfgPath: filepath.Join(dir, "config.toml"), done: make(chan error, 1)}
 	writeCfg(t, r.cfgPath, cfg)
-	r.d = &Daemon{ConfigPath: r.cfgPath, StateDir: filepath.Join(dir, "state"), Runner: e.R, Clock: r.clk, Tick: time.Minute, AllowLocalCloneURLs: true}
+	r.secrets = &secrets.Mem{}
+	r.d = &Daemon{ConfigPath: r.cfgPath, StateDir: filepath.Join(dir, "state"), Runner: e.R, Clock: r.clk, Tick: time.Minute, AllowLocalCloneURLs: true, Secrets: r.secrets}
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
 	go func() { r.done <- r.d.Run(ctx) }()

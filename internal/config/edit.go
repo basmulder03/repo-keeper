@@ -102,7 +102,11 @@ func render(header string, v any) string {
 		if key == "" || key == "-" {
 			continue
 		}
-		if val, ok := tomlValue(f); ok {
+		val, ok := tomlValue(f)
+		if !ok && rt.Field(i).Tag.Get("render") == "always" {
+			val, ok = tomlValueAlways(f)
+		}
+		if ok {
 			b.WriteString(key + " = " + val + "\n")
 		}
 	}
@@ -364,4 +368,12 @@ func ParseFlexibleDuration(s string) (time.Duration, error) {
 		return 0, fmt.Errorf("invalid duration %q (examples: 30m, 12h, 7d)", s)
 	}
 	return d, nil
+}
+
+// tomlValueAlways renders a zero value of the kinds that carry a meaningful zero (see the render:"always" tag).
+func tomlValueAlways(f reflect.Value) (string, bool) {
+	if d, ok := f.Interface().(Duration); ok {
+		return quote(FormatDuration(time.Duration(d))), true
+	}
+	return "", false
 }

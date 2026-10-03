@@ -217,6 +217,7 @@ func (s *Store) SyncRepos(ctx context.Context, specs []Spec, firstDue func(i int
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	// #nosec G202 -- in holds only question-mark placeholders; values are bound
 	if _, err := tx.ExecContext(ctx, "UPDATE repos SET active = 0 WHERE source = ''"); err != nil {
 		return err
 	}
@@ -252,6 +253,7 @@ func (s *Store) SyncManaged(ctx context.Context, account string, specs []Spec, f
 	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM repos WHERE source = ?", account).Scan(&before); err != nil {
 		return res, err
 	}
+	// #nosec G202 -- in holds only question-mark placeholders; values are bound
 	if _, err := tx.ExecContext(ctx, "UPDATE repos SET active = 0, missing = 1 WHERE source = ?", account); err != nil {
 		return res, err
 	}
@@ -545,4 +547,32 @@ func retryBusy(fn func() error) error {
 func isBusy(err error) bool {
 	s := err.Error()
 	return strings.Contains(s, "SQLITE_BUSY") || strings.Contains(s, "database is locked") || strings.Contains(s, "SQLITE_LOCKED")
+}
+
+// ForgetRemovedAccounts deactivates repos discovered by accounts that are no longer configured (their local clones
+// are never touched) and drops those accounts' saved state. keep lists the account names still in the config.
+func (s *Store) ForgetRemovedAccounts(ctx context.Context, keep []string) error {
+	args := make([]any, len(keep))
+	marks := make([]string, len(keep))
+	for i, k := range keep {
+		args[i], marks[i] = k, "?"
+	}
+	in := "(" + strings.Join(marks, ",") + ")"
+	if len(keep) == 0 {
+		in = "('')"
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	// #nosec G202 -- in holds only question-mark placeholders; values are bound
+	if _, err := tx.ExecContext(ctx, "UPDATE repos SET active = 0 WHERE source <> '' AND source NOT IN "+in, args...); err != nil {
+		return err
+	}
+	// #nosec G202 -- in holds only question-mark placeholders; values are bound
+	if _, err := tx.ExecContext(ctx, "DELETE FROM accounts WHERE name NOT IN "+in, args...); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

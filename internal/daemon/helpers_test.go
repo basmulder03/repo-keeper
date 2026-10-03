@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/basmulder03/repo-keeper/internal/obs"
 )
@@ -36,3 +37,9 @@ func newTestLog(w *syncBuf) testLog {
 	r := &obs.Redactor{}
 	return testLog{logger: obs.New(w, slog.LevelDebug, false, r), red: r}
 }
+
+// nowClock is a real-time clock for tests that call the backend directly.
+type nowClock struct{}
+
+func (nowClock) Now() time.Time                         { return time.Now() }
+func (nowClock) After(d time.Duration) <-chan time.Time { return time.After(d) }

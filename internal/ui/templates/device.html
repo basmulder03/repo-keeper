@@ -1,0 +1,24 @@
+{{define "content"}}
+{{with .D}}
+<h1>Sign in to GitHub{{if .Account}} as account <code>{{.Account}}</code>{{end}}</h1>
+{{if eq .State "pending"}}
+<meta http-equiv="refresh" content="3">
+<div class="panel" aria-live="polite">
+  <p>1. Open {{if .VerificationURI}}<a class="btn" href="{{.VerificationURI}}" target="_blank" rel="noopener noreferrer">{{.VerificationURI}}</a>{{else}}the address shown below{{end}} in your browser.</p>
+  <p>2. Enter this code:</p>
+  <p style="font-size:2rem;font-family:var(--mono);letter-spacing:.15em"><strong>{{.UserCode}}</strong></p>
+  <p>3. Approve the access. This page updates by itself.</p>
+  {{if .Message}}<p>{{.Message}}</p>{{end}}
+  <p class="muted">The code expires at {{stamp .ExpiresAt}}. Waiting&hellip;</p>
+  <form method="post" action="/devices/{{.ID}}/cancel">{{template "csrf" $}}<button type="submit">Cancel</button></form>
+</div>
+{{else if eq .State "done"}}
+<meta http-equiv="refresh" content="4;url=/accounts?m=account-saved">
+<p class="flash ok" role="status">Signed in as <strong>{{.Login}}</strong>. The account <code>{{.Account}}</code> is saved and its repositories will be listed shortly.</p>
+<p><a class="btn" href="/accounts">Back to accounts</a></p>
+{{else}}
+<p class="flash err" role="alert">{{if eq .State "cancelled"}}Sign-in cancelled.{{else}}Sign-in failed: {{.Message}}{{end}}</p>
+<p><a class="btn" href="/accounts">Back to accounts</a></p>
+{{end}}
+{{end}}
+{{end}}

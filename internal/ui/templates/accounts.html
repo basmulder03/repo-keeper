@@ -1,5 +1,6 @@
 {{define "content"}}
 <h1>Accounts</h1>
+<p><a class="btn" href="/accounts/new">Add account</a> <span class="muted">GitHub and GitLab, cloud or self-hosted. Credentials are verified before they are saved.</span></p>
 <div class="panel">
 <table>
   <caption>Platform logins</caption>
@@ -14,9 +15,13 @@
       {{if not .Expires.IsZero}}<br><span class="muted">token expires {{stamp .Expires}}</span>{{end}}</td>
     <td>{{if .Login}}{{.Login}}{{else}}—{{end}}</td><td>{{.RepoCount}}</td>
     <td class="num">{{ago .Discovered}}</td><td class="num">{{until .NextDiscovery}}</td>
-    <td><form class="inline" method="post" action="/accounts/{{.Name}}/discover">{{template "csrf" $}}<button type="submit">List repositories now</button></form></td>
+    <td>
+      <a class="btn" href="/accounts/{{.Name}}/edit">Edit / sign in again</a>
+      <form class="inline" method="post" action="/accounts/{{.Name}}/discover">{{template "csrf" $}}<button type="submit">List repositories now</button></form>
+      <form class="inline" method="post" action="/accounts/{{.Name}}/remove" data-confirm="Remove this account? Its repositories stop syncing; cloned folders are never deleted.">{{template "csrf" $}}<label><input type="checkbox" name="delete_token" checked> forget token</label> <button class="danger" type="submit">Remove</button></form>
+    </td>
   </tr>
-  {{else}}<tr><td colspan="8" class="muted">No accounts. Add one with <code>repo-keeper accounts add</code>; tokens are stored in the OS keychain and are never shown here.</td></tr>{{end}}
+  {{else}}<tr><td colspan="8" class="muted">No accounts yet. Use <a href="/accounts/new">Add account</a>; tokens go to your secret store and are never shown here.</td></tr>{{end}}
   </tbody>
 </table>
 </div>

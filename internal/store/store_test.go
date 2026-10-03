@@ -312,3 +312,35 @@ func TestOpen_ConcurrentFirstOpen_MigratesExactlyOnce(t *testing.T) {
 		}
 	}
 }
+
+func TestForgetRemovedAccounts_DeactivatesTheirReposAndState_KeepsOthers(t *testing.T) {
+	s, _ := open(t)
+	ctx := t.Context()
+	_ = s.SyncRepos(ctx, []Spec{{Path: "/manual", Remote: "o", Interval: time.Hour}}, at(t0))
+	_, _ = s.SyncManaged(ctx, "keep", []Spec{specFor("/r/k", "o/k")}, at(t0))
+	_, _ = s.SyncManaged(ctx, "gone", []Spec{specFor("/r/g", "o/g")}, at(t0))
+	_ = s.SaveAccount(ctx, Account{Name: "keep", Provider: "github"})
+	_ = s.SaveAccount(ctx, Account{Name: "gone", Provider: "github"})
+
+	if err := s.ForgetRemovedAccounts(ctx, []string{"keep"}); err != nil {
+		t.Fatal(err)
+	}
+	rs, _ := s.ListRepos(ctx)
+	paths := map[string]bool{}
+	for _, r := range rs {
+		paths[r.Path] = true
+	}
+	if !paths["/manual"] || !paths["/r/k"] || paths["/r/g"] {
+		t.Fatalf("repos=%v", paths)
+	}
+	as, _ := s.ListAccounts(ctx)
+	if len(as) != 1 || as[0].Name != "keep" {
+		t.Fatalf("accounts=%+v", as)
+	}
+	if err := s.ForgetRemovedAccounts(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	if rs, _ := s.ListRepos(ctx); len(rs) != 1 || rs[0].Path != "/manual" {
+		t.Fatalf("with no accounts every managed repo must be deactivated, manual ones kept: %+v", rs)
+	}
+}

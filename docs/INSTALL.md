@@ -30,7 +30,7 @@ inputs.repo-keeper.url = "github:basmulder03/repo-keeper";
 }
 ```
 
-With `settings` set, `~/.config/repo-keeper/config.toml` is generated read-only and the UI's config editor is disabled by design (change the Nix, rebuild). Leave `settings` unset to manage the file yourself or through the UI.
+With `settings` set, `~/.config/repo-keeper/config.toml` is generated read-only and the UI's forms are read-only by design (change the Nix, rebuild). Leave `settings` unset to manage the file yourself or through the UI.
 
 **NixOS** (installs the package and the user units; each user opts in):
 

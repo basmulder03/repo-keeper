@@ -36,12 +36,18 @@ type page struct {
 }
 
 var messages = map[string]string{
-	"sync-queued":   "Sync queued; it starts within a few seconds.",
-	"discover":      "Discovery queued for that account.",
-	"config-saved":  "Configuration saved. The daemon applies it within seconds.",
-	"restored":      "Branch restored.",
-	"cleanup-done":  "Cleanup finished.",
-	"cleanup-empty": "Cleanup finished: nothing was safe to delete.",
+	"settings-saved":         "Settings saved and applied.",
+	"settings-saved-restart": "Settings saved. Some of them (parallel syncs, per-host limit, UI port, secret storage) take effect after a restart; use Debug, then Restart daemon.",
+	"repo-added":             "Repository added.",
+	"repo-removed":           "Repository removed from the list (the clone on disk is untouched).",
+	"account-saved":          "Account saved. Repositories are listed shortly.",
+	"account-removed":        "Account removed. Cloned repositories are never deleted.",
+	"device-cancelled":       "Sign-in cancelled.",
+	"sync-queued":            "Sync queued; it starts within a few seconds.",
+	"discover":               "Discovery queued for that account.",
+	"restored":               "Branch restored.",
+	"cleanup-done":           "Cleanup finished.",
+	"cleanup-empty":          "Cleanup finished: nothing was safe to delete.",
 }
 
 func funcs() template.FuncMap {
@@ -66,7 +72,7 @@ func short(s string) string {
 
 func stamp(t time.Time) string {
 	if t.IsZero() {
-		return "—"
+		return "\u2014"
 	}
 	return t.Local().Format("2006-01-02 15:04:05")
 }
@@ -89,7 +95,7 @@ func ago(t time.Time) string {
 
 func until(t time.Time) string {
 	if t.IsZero() {
-		return "—"
+		return "\u2014"
 	}
 	d := time.Until(t)
 	switch {
@@ -415,41 +421,15 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request, si sessionI
 	s.render(w, r, si, "audit", "Audit journal", "audit", map[string]any{"Entries": entries, "Q": q, "N": n, "Sizes": []int{100, 200, 500, 1000}})
 }
 
-// ---- config
-
-type configData struct {
-	Text     string
-	Version  string
-	Errors   []string
-	ReadOnly string
-}
+// ---- config file (read-only view; every change is made through the forms)
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request, si sessionInfo) {
-	text, ver, err := s.Backend.Config()
+	text, err := s.Backend.Config()
 	if err != nil {
 		s.internal(w, r, err)
 		return
 	}
-	s.render(w, r, si, "config", "Configuration", "config", configData{Text: text, Version: ver, ReadOnly: s.Backend.ConfigReadOnly()})
-}
-
-func (s *Server) handleConfigSave(w http.ResponseWriter, r *http.Request, si sessionInfo) {
-	text := strings.ReplaceAll(r.PostFormValue("text"), "\r\n", "\n")
-	if why := s.Backend.ConfigReadOnly(); why != "" {
-		s.fail(w, r, http.StatusForbidden, "The configuration is read-only: "+why)
-		return
-	}
-	if len(text) > maxConfigSize {
-		s.fail(w, r, http.StatusRequestEntityTooLarge, "Configuration is too large.")
-		return
-	}
-	if err := s.Backend.SaveConfig(r.Context(), text, r.PostFormValue("version")); err != nil {
-		cd := configData{Text: text, Version: r.PostFormValue("version"), Errors: strings.Split(strings.TrimSpace(err.Error()), "\n")}
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		s.render(w, r, si, "config", "Configuration", "config", cd)
-		return
-	}
-	redirect(w, r, "/config", "config-saved")
+	s.render(w, r, si, "config", "Configuration file", "settings", map[string]any{"Text": text, "Path": s.Backend.Info().ConfigPath})
 }
 
 // ---- debug

@@ -22,7 +22,7 @@
     <td><form class="inline" method="post" action="/repos/{{.ID}}/sync">{{template "csrf" $}}<input type="hidden" name="next" value="/"><button type="submit">Sync now</button></form></td>
   </tr>
   {{else}}
-  <tr><td colspan="7" class="muted">No repositories yet. Add <code>[[repo]]</code> entries or an <a href="/accounts">account</a> in the <a href="/config">configuration</a>.</td></tr>
+  <tr><td colspan="7" class="muted">No repositories yet. Add an <a href="/accounts/new">account</a> to discover repositories, or list a clone in <a href="/settings">Settings</a>.</td></tr>
   {{end}}
   </tbody>
 </table>

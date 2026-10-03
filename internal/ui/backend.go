@@ -38,6 +38,7 @@ type Status = control.Status
 
 // Backend is everything the UI may ask of the daemon; the UI never touches git, the DB or secrets itself.
 type Backend interface {
+	Manage
 	Info() Info
 	Repos(ctx context.Context) ([]store.Repo, error)
 	Repo(ctx context.Context, id int64) (store.Repo, error)
@@ -60,11 +61,7 @@ type Backend interface {
 	CleanupNow(ctx context.Context, id int64) (cleanup.Report, error)
 	Restore(ctx context.Context, id int64, branch string) error
 
-	// ConfigReadOnly explains why the configuration cannot be edited here ("" = editable), e.g. it is managed by Nix.
-	ConfigReadOnly() string
-	// Config returns the file text and a version token for conflict detection.
-	Config() (text, version string, err error)
-	// SaveConfig validates then atomically replaces the file; it fails if version no longer matches.
-	SaveConfig(ctx context.Context, text, version string) error
+	// Config returns the configuration file text for read-only display; changes go through the Manage forms.
+	Config() (string, error)
 	Bundle(ctx context.Context) ([]byte, error)
 }

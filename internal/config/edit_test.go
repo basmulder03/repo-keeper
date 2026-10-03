@@ -280,3 +280,13 @@ func TestAccount_OAuthFields_ValidatedAndPersisted(t *testing.T) {
 		}
 	}
 }
+
+func TestSetCleanup_ZeroMinAgeIsWrittenExplicitly(t *testing.T) {
+	out, err := SetCleanup(sample, Cleanup{Mode: "auto", MinAge: 0, Protected: []string{"main"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := mustParse(t, out); time.Duration(c.Cleanup.MinAge) != 0 || !strings.Contains(out, `min_age = "0s"`) {
+		t.Fatalf("a zero minimum age must survive (the default is 7d):\n%s", out)
+	}
+}

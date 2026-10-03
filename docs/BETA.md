@@ -37,7 +37,7 @@ Check: `repo-keeper version` prints `0.1.0-beta.1`, and `repo-keeper doctor` is 
 repo-keeper init                              # starter config; cleanup is dry-run
 # GitHub: use a fine-grained, read-only token (Contents, Metadata, Pull requests: read)
 repo-keeper accounts add personal --token-stdin --include 'you/*' < token.txt
-$EDITOR ~/.config/repo-keeper/config.toml     # set [general] root = "/path/for/clones"
+$EDITOR ~/.config/repo-keeper/config.toml     # set [general] root = "/path/for/clones"   # or open `repo-keeper ui` → Settings
 repo-keeper accounts check personal           # login, scopes, warnings, API quota
 repo-keeper discover                          # what WOULD be cloned: nothing changes yet
 ```

@@ -86,6 +86,9 @@ type Daemon struct {
 	discWake   chan struct{}
 	httpMu     sync.Mutex
 	httpByCA   map[string]*httpx.Client
+	cfgMu      sync.Mutex
+	devMu      sync.Mutex
+	devices    map[string]*deviceFlow
 	discMu     sync.Mutex
 	nextDisc   map[string]time.Time
 	accounts   map[string]store.Account
@@ -149,6 +152,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		d.Redactor = &obs.Redactor{}
 	}
 	d.nextDisc, d.accounts = map[string]time.Time{}, map[string]store.Account{}
+	d.devices = map[string]*deviceFlow{}
 	d.reloadWake, d.discWake = make(chan struct{}, 1), make(chan struct{}, 1)
 	d.started = d.Clock.Now()
 	r := *d.Runner // private copy so only the daemon records commands
@@ -235,7 +239,14 @@ func (d *Daemon) reconcile(ctx context.Context, l *liveConfig) error {
 		s := l.cfg.Resolve(r)
 		specs = append(specs, store.Spec{Path: s.Path, Remote: s.Remote, Interval: s.Interval})
 	}
-	return d.Store.SyncRepos(ctx, specs, func(i int) time.Time { return now.Add(time.Duration(i) * firstSyncStagger) })
+	if err := d.Store.SyncRepos(ctx, specs, func(i int) time.Time { return now.Add(time.Duration(i) * firstSyncStagger) }); err != nil {
+		return err
+	}
+	names := make([]string, 0, len(l.cfg.Accounts))
+	for _, a := range l.cfg.Accounts {
+		names = append(names, a.Name)
+	}
+	return d.Store.ForgetRemovedAccounts(ctx, names) // accounts removed from the config stop showing up and syncing
 }
 
 // reloadLoop polls the config file and applies valid changes; invalid files never replace a working config.
@@ -282,6 +293,10 @@ func (d *Daemon) reloadLoop(ctx context.Context, initial config.Config) {
 			d.Log.Warn("concurrency/per_host changes apply after restart")
 		}
 		d.Sched.Wake()
+		select { // list repositories of new or changed accounts now, not at the next 30 s tick
+		case d.discWake <- struct{}{}:
+		default:
+		}
 		d.Log.Info("config reloaded", "repos", len(cfg.Repos), "accounts", len(cfg.Accounts))
 		_ = d.Store.AddEvent(ctx, store.Event{Time: d.Clock.Now(), Level: "info", Code: "config-reloaded", Message: fmt.Sprintf("%d repos, %d accounts", len(cfg.Repos), len(cfg.Accounts))})
 	}

@@ -54,7 +54,7 @@ make build
 ./bin/repo-keeper accounts add personal --token-stdin --include 'me/*,my-org/*' < token.txt
 # GitLab (nested groups welcome): a group/project access token with read_api + read_repository
 ./bin/repo-keeper accounts add work --provider gitlab --base-url https://gitlab.example.com --token-stdin --include 'acme/**' < token.txt
-$EDITOR ~/.config/repo-keeper/config.toml   # set [general] root = "/home/you/code"
+$EDITOR ~/.config/repo-keeper/config.toml   # set [general] root = "/home/you/code"   # or open `repo-keeper ui` → Settings
 ./bin/repo-keeper discover                  # preview what would be cloned
 ./bin/repo-keeper daemon                    # sync in the background (see packaging/systemd)
 ./bin/repo-keeper status

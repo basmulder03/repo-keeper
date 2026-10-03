@@ -4,8 +4,6 @@ package daemon
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -294,73 +292,11 @@ func (b uiBackend) Restore(ctx context.Context, id int64, branch string) error {
 	return err
 }
 
-func versionOf(text string) string {
-	sum := sha256.Sum256([]byte(text))
-	return hex.EncodeToString(sum[:8])
-}
-
 // ConfigReadOnly reports a declaratively managed config (a symlink, e.g. into /nix/store): replacing it would fight the tool that owns it.
-func (b uiBackend) ConfigReadOnly() string {
-	if fi, err := os.Lstat(b.d.ConfigPath); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-		target, _ := os.Readlink(b.d.ConfigPath)
-		return "this file is a symlink to " + target + " and is managed outside repo-keeper (for example by Home Manager); change it there"
-	}
-	return ""
-}
 
-func (b uiBackend) Config() (string, string, error) {
+func (b uiBackend) Config() (string, error) {
 	data, err := os.ReadFile(b.d.ConfigPath)
-	if err != nil {
-		return "", "", err
-	}
-	return string(data), versionOf(string(data)), nil
-}
-
-// SaveConfig validates, keeps the previous file in the history, replaces atomically and asks the daemon to reload.
-func (b uiBackend) SaveConfig(_ context.Context, text, version string) error {
-	if why := b.ConfigReadOnly(); why != "" {
-		return errors.New("configuration is read-only: " + why)
-	}
-	cur, err := os.ReadFile(b.d.ConfigPath)
-	if err != nil {
-		return err
-	}
-	if version != "" && version != versionOf(string(cur)) {
-		return errors.New("the configuration changed on disk since you opened it; reload this page and re-apply your edit")
-	}
-	if _, err := config.Parse([]byte(text)); err != nil {
-		return err
-	}
-	if err := b.d.archiveConfig(cur); err != nil {
-		return fmt.Errorf("could not keep a backup of the current configuration: %w", err)
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(b.d.ConfigPath), ".config-*.tmp")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	if _, err := tmp.WriteString(text); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmp.Name(), 0o600); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp.Name(), b.d.ConfigPath); err != nil {
-		return err
-	}
-	select {
-	case b.d.reloadWake <- struct{}{}:
-	default:
-	}
-	return nil
+	return string(data), err
 }
 
 // archiveConfig stores old under <state>/config-history and keeps the newest configHistory files.
@@ -369,10 +305,29 @@ func (d *Daemon) archiveConfig(old []byte) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	name := fmt.Sprintf("config-%s.toml", d.Clock.Now().UTC().Format("20060102T150405.000"))
-	// #nosec G703 -- dir is the daemon state dir and name is generated from the clock
-	if err := os.WriteFile(filepath.Join(dir, name), old, 0o600); err != nil { //nolint:gosec // see #nosec above
-		return err
+	stamp := d.Clock.Now().UTC().Format("20060102T150405.000")
+	var written bool
+	for n := 0; n < 1000 && !written; n++ { // never overwrite an earlier backup, even for two edits in the same instant
+		name := fmt.Sprintf("config-%s-%03d.toml", stamp, n)
+		// #nosec G304 G703 -- dir is the daemon state dir and name is generated
+		f, err := os.OpenFile(filepath.Join(dir, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // see #nosec above
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		_, werr := f.Write(old)
+		if cerr := f.Close(); werr == nil {
+			werr = cerr
+		}
+		if werr != nil {
+			return werr
+		}
+		written = true
+	}
+	if !written {
+		return errors.New("too many configuration backups with the same timestamp")
 	}
 	ents, err := os.ReadDir(dir)
 	if err != nil {
@@ -393,7 +348,7 @@ func (b uiBackend) Bundle(ctx context.Context) ([]byte, error) {
 	accounts, _ := d.Store.ListAccounts(ctx)
 	events, _ := d.Store.RecentEvents(ctx, bundleEvents)
 	aud, _ := b.Audit(ctx, bundleAuditMax)
-	text, _, _ := b.Config()
+	text, _ := b.Config()
 	type hostView struct {
 		Host       string
 		Cooldown   time.Time
