@@ -1,5 +1,14 @@
-* @basmulder03
-/internal/gitx/ @basmulder03
-/internal/secrets/ @basmulder03
-/internal/ui/ @basmulder03
-/SECURITY.md @basmulder03
+# Default owner for everything
+*                         @basmulder03
+
+# Safety-critical code and the documents that define it: always needs the owner's eye
+/internal/cleanup/        @basmulder03
+/internal/gitx/           @basmulder03
+/internal/secrets/        @basmulder03
+/docs/THREAT-MODEL.md     @basmulder03
+/SECURITY.md              @basmulder03
+
+# Release and supply-chain configuration
+/.github/                 @basmulder03
+/.goreleaser.yaml         @basmulder03
+/flake.nix                @basmulder03
