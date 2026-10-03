@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/basmulder03/repo-keeper/internal/config"
 	"github.com/basmulder03/repo-keeper/internal/daemon"
 	"github.com/basmulder03/repo-keeper/internal/instance"
 	"github.com/basmulder03/repo-keeper/internal/paths"
@@ -84,6 +85,10 @@ func (a *app) cmdStart(ctx context.Context, args []string) int {
 	}
 	logPath := filepath.Join(lf.stateDir, "daemon.log")
 	logStart := fileSize(logPath)
+	expectUI := !lf.noUI
+	if cfg, err := config.Load(lf.configPath); err == nil {
+		expectUI = expectUI && cfg.UIEnabled()
+	}
 	child, err := a.spawnDaemon(&lf, logPath)
 	if err != nil {
 		_, _ = fmt.Fprintln(a.err, "could not start the daemon:", err)
@@ -99,7 +104,9 @@ func (a *app) cmdStart(ctx context.Context, args []string) int {
 			return 1
 		case <-time.After(100 * time.Millisecond):
 		}
-		if loggedStarted(logPath, logStart) { // also covers a daemon without a web interface, which has no status endpoint
+		_, serr := c.Status(ctx)
+		// a daemon without a web interface has no status endpoint, so its own log line is the readiness signal
+		if (expectUI && serr == nil) || (!expectUI && loggedStarted(logPath, logStart)) {
 			// Do not Release the process: the Wait goroutine above is still using it. This CLI exits right after, and the
 			// child (its own session leader) keeps running.
 			a.printf("started (pid %d)\nlog: %s\nopen the interface: repo-keeper ui (when the web interface is enabled)\nstop it: repo-keeper stop\n%s\n",
