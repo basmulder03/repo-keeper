@@ -85,7 +85,7 @@ Priority: **M** must (v1.0), **S** should, **C** could (post-1.0). Each requirem
 | FR-O2 | M | Single instance per user (lockfile/socket); graceful shutdown; crash-safe state. |
 | FR-O3 | M | Structured logs (JSON optional), rotation, redaction of secrets/tokens. |
 | FR-O4 | M | `doctor`: checks git version, keychain access, connectivity, clock skew, disk space, permissions. |
-| FR-O5 | S | Update **check** (explicit `update --check`; optional opt-in background notification, default off). Applying an update is always an explicit user action, never automated; package-manager installs print the manager's command instead (ADR-0021). No silent self-replace. |
+| FR-O5 | S | Update **check** (explicit `update --check`; background notification on by default, opt-out via `[update] check = false`). Applying an update is always an explicit user action, never automated; package-manager installs print the manager's command instead (ADR-0021). No silent self-replace. |
 
 ## 3. Non-functional requirements
 
