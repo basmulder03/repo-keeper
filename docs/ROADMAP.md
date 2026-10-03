@@ -17,6 +17,10 @@ Ordering, not promises (one part-time maintainer). **Linux/NixOS first; GitHub f
 | **1.0** | Stable config/CLI | Docs complete |
 | **Later** | macOS (launchd, notarization), Windows (Task Scheduler, Authenticode/SignPath), Windows/macOS tray, Bitbucket DC | Tackled when a release for that OS is wanted |
 
+## Todo (before the next release)
+- [ ] **Single source for the version.** `flake.nix` hardcodes the version (twice) and beta.3 shipped with it stale; the release pipeline should set it from the tag (and fail if a tracked copy disagrees), so a release can never be built or installed under the wrong version.
+- [ ] Remove the hand-maintained version from `docs/BETA.md` titles for the same reason.
+
 ## Post-1.0 ideas (not committed)
 GitHub App auth UX, Prometheus metrics, post-sync hooks, worktree-aware tools, config export, out-of-process provider plugins.
 
