@@ -19,8 +19,8 @@
     </select>
     {{if .Edit}}<input type="hidden" name="provider" value="{{.Form.Provider}}">{{end}}</p>
   <p><label for="base_url">Server address</label>
-    <input id="base_url" name="base_url" type="text" size="50" value="{{.Form.BaseURL}}" placeholder="leave empty for github.com / gitlab.com">
-    <span class="muted"><br>Self-hosted: GitHub Enterprise <code>https://ghe.example.com/api/v3</code>, GitLab <code>https://gitlab.example.com</code>.</span></p>
+    <input id="base_url" name="base_url" type="text" size="50" value="{{.Form.BaseURL}}" placeholder="leave empty for github.com / gitlab.com (required for Gitea / Forgejo)">
+    <span class="muted"><br>Self-hosted: GitHub Enterprise <code>https://ghe.example.com/api/v3</code>, GitLab <code>https://gitlab.example.com</code>, Gitea / Forgejo <code>https://codeberg.org</code>.</span></p>
 </fieldset>
 
 <fieldset class="panel">

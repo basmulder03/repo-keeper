@@ -2,6 +2,11 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
+## Unreleased
+
+### Added
+- **Gitea and Forgejo support** (`provider = "gitea"` / `"forgejo"`, incl. Codeberg): discovery, clone, fast-forward and safe cleanup via merged-PR lookup. `base_url` is required. Tested against fixtures only so far; see docs/PROVIDERS.md.
+
 ## 0.1.0-beta.2
 
 ### Fixed

@@ -29,6 +29,10 @@ const (
 	GitHub Kind = "github"
 	// GitLab is gitlab.com and self-managed GitLab.
 	GitLab Kind = "gitlab"
+	// Gitea is Gitea (self-hosted).
+	Gitea Kind = "gitea"
+	// Forgejo is Forgejo, including Codeberg.
+	Forgejo Kind = "forgejo"
 )
 
 // ErrAuth means the credential is missing, revoked or expired; retrying will not help until it is replaced.

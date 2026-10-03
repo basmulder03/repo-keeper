@@ -24,3 +24,6 @@ Folded into REQUIREMENTS (FR-S1, S6, C4, C6, C8, U1, O1, CMP-4), ROADMAP, ARCHIT
 
 ## Still open
 None. Remaining choices are implementation details tracked in issues.
+
+## Gitea / Forgejo live verification
+The provider is fixture-tested only. Before 1.0: run discovery, clone and merged-branch lookup against a real Forgejo (Codeberg) and a Gitea instance, confirm `Authorization: token` and `Link` pagination behave as documented, and re-read each host's ToS/API policy.

@@ -92,8 +92,8 @@ type UI struct {
 // Account is a platform login whose repositories are discovered and cloned automatically.
 type Account struct {
 	Name     string `toml:"name,omitempty"`
-	Provider string `toml:"provider,omitempty"` // github | gitlab
-	BaseURL  string `toml:"base_url,omitempty"` // API base: GHES https://ghe.example.com/api/v3, GitLab https://gitlab.example.com; default is the public cloud
+	Provider string `toml:"provider,omitempty"` // github | gitlab | gitea | forgejo
+	BaseURL  string `toml:"base_url,omitempty"` // API base: GHES https://ghe.example.com/api/v3, GitLab https://gitlab.example.com, Gitea/Forgejo https://git.example.com (required); default is the public cloud
 	CAFile   string `toml:"ca_file,omitempty"`  // PEM bundle with the private CA of a self-hosted instance (absolute path)
 	// Credential source; with neither set the OS keychain entry "account/<name>" is used.
 	TokenEnv          string   `toml:"token_env,omitempty"`
@@ -216,6 +216,9 @@ func (c Config) Validate() error {
 		names[a.Name] = true
 		if !provider.Known(provider.Kind(a.Provider)) {
 			bad("account[%d].provider %q is not supported (available: %s)", i, a.Provider, strings.Join(provider.Kinds(), ", "))
+		}
+		if (a.Provider == "gitea" || a.Provider == "forgejo") && a.BaseURL == "" {
+			bad("account[%d].base_url is required for %s (the address of your server, e.g. https://codeberg.org)", i, a.Provider)
 		}
 		if a.TokenEnv != "" && a.TokenFile != "" {
 			bad("account[%d]: set only one of token_env and token_file", i)
