@@ -19,12 +19,12 @@
       packages = forAll (pkgs: {
         default = pkgs.buildGoModule {
           pname = "repo-keeper";
-          version = "0.1.0-beta.2";
+          version = "0.1.0-beta.3";
           src = ./.;
           vendorHash = "sha256-RYbPB9cNhC836bnmoTWCgQfpWrRoaz0V/wqKq4hmS18=";
           env.CGO_ENABLED = 0;
           subPackages = [ "cmd/repo-keeper" "cmd/repo-keeper-tray" ];
-          ldflags = [ "-s" "-w" "-X main.version=0.1.0-beta.2" "-X main.commit=${self.shortRev or self.dirtyShortRev or "dev"}" ];
+          ldflags = [ "-s" "-w" "-X main.version=0.1.0-beta.3" "-X main.commit=${self.shortRev or self.dirtyShortRev or "dev"}" ];
           nativeCheckInputs = [ pkgs.git ];
           meta = {
             description = "Keeps local clones of your remote repositories in sync";
