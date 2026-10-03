@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -56,7 +57,7 @@ func setup(t *testing.T) (a *app, stdout, stderr *strings.Builder, cfg string, s
 	a.newRunner = func() (*gitx.Runner, error) { return e.R, nil }
 	cfg = filepath.Join(e.Root, "config.toml")
 	root := filepath.Join(e.Root, "code")
-	_ = os.WriteFile(cfg, []byte("[general]\nroot = \""+root+"\"\n"), 0o600)
+	_ = os.WriteFile(cfg, []byte("[general]\nroot = "+strconv.Quote(root)+"\n"), 0o600)
 	_ = os.MkdirAll(filepath.Join(root, "github", "acme", "have"), 0o750)
 	return a, &out, &errb, cfg, fakeGitHub(t)
 }

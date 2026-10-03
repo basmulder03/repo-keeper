@@ -124,7 +124,7 @@ func TestUI_EndToEnd_SyncNowConfigCleanupRestoreAuditDebug(t *testing.T) {
 	e.Git(e.Work, "push", "-q", "origin", "main")
 	e.Git(e.Origin, "branch", "-D", "feat")
 
-	cfg := "[general]\ninterval = \"30m\"\n[cleanup]\nmode = \"dry-run\"\nmin_age = \"0s\"\n[[repo]]\npath = \"" + e.Work + "\"\n"
+	cfg := "[general]\ninterval = \"30m\"\n[cleanup]\nmode = \"dry-run\"\nmin_age = \"0s\"\n[[repo]]\npath = " + strconv.Quote(e.Work) + "\n"
 	r, b := startWithUI(t, e, cfg)
 	r.waitFor(t, "first sync", func() bool { rs := r.repos(t); return len(rs) == 1 && rs[0].LastStatus == "ok" })
 
@@ -257,7 +257,7 @@ func TestUI_NoUIFlag_AndDisabledInConfig(t *testing.T) {
 
 func TestUI_MachineAPI_StatusPauseSyncAll(t *testing.T) {
 	e := gitxtest.New(t)
-	cfg := "[general]\ninterval = \"30m\"\n[cleanup]\nmode = \"off\"\n[[repo]]\npath = \"" + e.Work + "\"\n"
+	cfg := "[general]\ninterval = \"30m\"\n[cleanup]\nmode = \"off\"\n[[repo]]\npath = " + strconv.Quote(e.Work) + "\n"
 	r, b := startWithUI(t, e, cfg)
 	r.waitFor(t, "first sync", func() bool { rs := r.repos(t); return len(rs) == 1 && rs[0].LastStatus == "ok" })
 

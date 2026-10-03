@@ -22,6 +22,7 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with: { go-version-file: go.mod, check-latest: true }
       - run: go test -race -cover -coverprofile=coverage.out ./...
+        shell: bash
       - run: go build ./...
       - name: Coverage floors (Linux leg only; Windows/macOS legs run the tests)
         if: matrix.os == 'ubuntu-latest'

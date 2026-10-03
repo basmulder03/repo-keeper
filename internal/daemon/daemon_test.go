@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -90,7 +91,7 @@ func cfgFor(repos ...string) string {
 	var b strings.Builder
 	b.WriteString("[general]\ninterval = \"30m\"\n[cleanup]\nmode = \"off\"\n")
 	for _, r := range repos {
-		b.WriteString("[[repo]]\npath = \"" + r + "\"\n")
+		b.WriteString("[[repo]]\npath = " + strconv.Quote(r) + "\n")
 	}
 	return b.String()
 }

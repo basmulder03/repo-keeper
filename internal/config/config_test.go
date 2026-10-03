@@ -43,7 +43,7 @@ func TestParse_Rejections(t *testing.T) {
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			if _, err := Parse([]byte(tc.in)); err == nil || !strings.Contains(err.Error(), tc.want) {
+			if _, err := Parse([]byte(winAbs(tc.in))); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err=%v want %q", err, tc.want)
 			}
 		})
@@ -58,7 +58,7 @@ func TestParse_ReportsAllProblemsAtOnce(t *testing.T) {
 }
 
 func TestResolve_OverridesAndDefaults(t *testing.T) {
-	c, _ := Parse([]byte("[general]\ninterval = \"1h\"\n[cleanup]\nmode = \"dry-run\"\n[[repo]]\npath = \"/a\"\n[[repo]]\npath = \"/b\"\ninterval = \"10m\"\nall_branches = false\ncleanup = \"auto\"\nremote = \"up\""))
+	c, _ := Parse([]byte(winAbs("[general]\ninterval = \"1h\"\n[cleanup]\nmode = \"dry-run\"\n[[repo]]\npath = \"/a\"\n[[repo]]\npath = \"/b\"\ninterval = \"10m\"\nall_branches = false\ncleanup = \"auto\"\nremote = \"up\"")))
 	a, b := c.Resolve(c.Repos[0]), c.Resolve(c.Repos[1])
 	if a.Interval != time.Hour || !a.AllBranches || a.Policy.Mode != "dry-run" || a.Remote != "origin" {
 		t.Fatalf("a=%+v", a)
@@ -164,7 +164,7 @@ func TestParse_Accounts_Rejections(t *testing.T) {
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			if _, err := Parse([]byte(tc.in)); err == nil || !strings.Contains(err.Error(), tc.want) {
+			if _, err := Parse([]byte(winAbs(tc.in))); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err=%v want %q", err, tc.want)
 			}
 		})
@@ -232,4 +232,10 @@ func TestParse_Accounts_GiteaForgejo_NeedBaseURL(t *testing.T) {
 			t.Errorf("%s with base_url rejected: %v", p, err)
 		}
 	}
+}
+
+// winAbs gives POSIX-style absolute test paths ("/a") the drive letter Windows requires; a no-op elsewhere.
+func winAbs(s string) string {
+	vol := filepath.ToSlash(filepath.VolumeName(os.TempDir()))
+	return strings.ReplaceAll(s, `"/`, `"`+vol+`/`)
 }
