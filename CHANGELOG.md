@@ -4,7 +4,11 @@ All notable changes are listed here. Versions follow [SemVer](https://semver.org
 
 ## Unreleased
 
+### Fixed
+- **Gitea, Forgejo and Bitbucket: squash-merged branches were never recognised as merged** in the running daemon (the merged-PR lookup read repository fields the daemon does not pass, so it always failed closed). Nothing was ever deleted wrongly; cleanup just could not use the PR information. The provider contract suite now calls the lookup exactly as the daemon does.
+
 ### Added
+- **Azure DevOps support** (`provider = "azuredevops"`, Services and Server): discovery across all projects of an organization, clone, fast-forward and safe cleanup via completed pull requests, with an organization-scoped PAT (`base_url` required). Project and repository names with spaces are supported (interior spaces are now allowed in clone paths). Tested against fixtures only so far; see docs/PROVIDERS.md.
 - **Bitbucket Cloud support** (`provider = "bitbucket"`): discovery across all your workspaces, clone, fast-forward and safe cleanup via merged-PR lookup, using an Atlassian API token (Atlassian retired app passwords). Tested against fixtures only so far; see docs/PROVIDERS.md.
 
 ## 0.1.0-beta.3

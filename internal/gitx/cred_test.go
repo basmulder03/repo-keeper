@@ -137,3 +137,17 @@ func TestCred_CAFileReachesGitAsEnvOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestCred_CloneAndLsRemote_InPathsWithSpaces(t *testing.T) {
+	e := gitxtest.New(t)
+	srv, auths := httpRemote(t, e)
+	url := srv.URL + "/origin.git"
+	dest := filepath.Join(e.Root, "azuredevops", "My Project", "my repo")
+	if err := e.R.Clone(t.Context(), url, dest, cred(t, srv, secret), false); err != nil {
+		t.Fatalf("Azure DevOps style names contain spaces: %v", err)
+	}
+	st, err := e.R.Repo(dest).WithCred(cred(t, srv, secret)).LsRemote(t.Context(), "origin")
+	if err != nil || st.DefaultBranch != "main" || auths.Load() == 0 {
+		t.Fatalf("st=%+v err=%v", st, err)
+	}
+}

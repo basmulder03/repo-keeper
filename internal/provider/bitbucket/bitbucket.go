@@ -286,10 +286,10 @@ var fullSHA = regexp.MustCompile(`^[0-9a-f]{40}([0-9a-f]{24})?$`)
 
 // MergedBranches implements provider.Provider.
 func (b *bb) MergedBranches(ctx context.Context, repo provider.Repo, branches []string) (map[string]string, error) {
-	if len(repo.Namespace) != 1 {
-		return nil, fmt.Errorf("bitbucket: unexpected namespace in %q", repo.FullName)
+	ws, slug, ok := strings.Cut(repo.FullName, "/") // the daemon passes only FullName
+	if !ok || ws == "" || slug == "" || strings.Contains(slug, "/") {
+		return nil, fmt.Errorf("bitbucket: unexpected repository name %q", repo.FullName)
 	}
-	ws, slug := repo.Namespace[0], repo.Name
 	want := map[string]bool{}
 	for _, br := range branches {
 		want[br] = true
