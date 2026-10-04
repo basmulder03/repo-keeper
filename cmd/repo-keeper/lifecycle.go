@@ -236,7 +236,13 @@ func (a *app) cmdStop(ctx context.Context, args []string) int {
 		_, _ = fmt.Fprintln(a.err, "could not ask the daemon to stop:", err)
 		return 1
 	}
-	if !a.waitFor(ctx, stopWait, func() bool { _, err := c.Status(ctx); return errors.Is(err, tray.ErrNotRunning) }) {
+	_, lockPath, _ := daemon.StatePaths(lf.stateDir)
+	// gone means gone: the control endpoint is closed AND the instance lock is released, so a following start cannot race the exit
+	if !a.waitFor(ctx, stopWait, func() bool {
+		_, err := c.Status(ctx)
+		_, held := instance.Holder(lockPath)
+		return errors.Is(err, tray.ErrNotRunning) && !held
+	}) {
 		_, _ = fmt.Fprintf(a.err, "the daemon is still running after %s (a long sync may be finishing); try again or stop the service manager unit\n", stopWait)
 		return 1
 	}
