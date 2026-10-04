@@ -5,7 +5,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-.PHONY: build test lint security fmt tidy gen check snapshot repro coverage fuzz perf version release-prep site
+.PHONY: build test lint security fmt tidy gen check snapshot repro coverage fuzz perf version release-prep site install-test
 .DEFAULT_GOAL := build
 
 build: ## static binary in ./bin
@@ -58,3 +58,7 @@ release-prep: ## bump VERSION and the changelog heading: make release-prep NEW=0
 
 site: build ## build the documentation site into ./_site (the pipeline publishes it)
 	cd tools/site && go test ./... && go run . -repo ../.. -bin ../../bin/repo-keeper $(if $(wildcard coverage.out),-coverage ../../coverage.out) -out ../../_site
+
+install-test: ## shellcheck the scripts and run the installer tests against a synthetic release
+	shellcheck -S warning scripts/*.sh
+	./scripts/test-install.sh

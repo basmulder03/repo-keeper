@@ -4,6 +4,8 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -203,8 +205,76 @@ func TestBuild_BrokenLinkFailsTheBuild(t *testing.T) {
 	write("README.md", "# Home\n\n[gone](docs/NOPE.md)\n")
 	write("go.mod", "module example.com/m\n\ngo 1.26\n")
 	write("VERSION", "1.0.0\n")
+	write("scripts/install.sh", "VERSION=\"${REPO_KEEPER_VERSION:-@VERSION@}\"\n")
 	b := &build{Repo: repo, Out: t.TempDir(), Bin: fakeBinary(t), RepoURL: "https://github.com/o/r", Branch: "main", Version: "1.0.0", Commit: "x", Date: time.Now()}
 	if err := b.generate(); err == nil || !strings.Contains(err.Error(), "NOPE.md") {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+func realBuild(t *testing.T, releases string) *build {
+	t.Helper()
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &build{
+		Repo: repo, Out: t.TempDir(), Bin: fakeBinary(t), Releases: releases, RepoURL: "https://github.com/basmulder03/repo-keeper", Branch: "main",
+		Version: "9.9.9-test", Commit: "abc1234", Date: time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC),
+	}
+}
+
+func TestInstall_NoPublishedRelease_PinsVERSIONAndSaysSo(t *testing.T) {
+	b := realBuild(t, "")
+	if err := b.generate(); err != nil {
+		t.Fatal(err)
+	}
+	page, _ := os.ReadFile(filepath.Join(b.Out, "install.html")) //nolint:gosec // temp output
+	script, _ := os.ReadFile(filepath.Join(b.Out, "install.sh")) //nolint:gosec // temp output
+	h, s := string(page), string(script)
+	if !strings.Contains(h, "No release is published yet") || !strings.Contains(h, "v9.9.9-test") {
+		t.Errorf("page must be honest that nothing is published: %.300s", h)
+	}
+	if !strings.Contains(s, `VERSION="${REPO_KEEPER_VERSION:-9.9.9-test}"`) {
+		t.Errorf("script is not pinned")
+	}
+	if !strings.Contains(s, `@VERSION@|"") die`) {
+		t.Errorf("the unpinned-copy guard must keep its placeholder, or the pinned version would be rejected")
+	}
+	sum := sha256.Sum256(script)
+	if !strings.Contains(h, hex.EncodeToString(sum[:])) {
+		t.Errorf("the page must show the SHA-256 of the script it serves")
+	}
+}
+
+func TestInstall_PinsNewestPublishedRelease_IgnoresDrafts(t *testing.T) {
+	rel := filepath.Join(t.TempDir(), "releases.json")
+	data := `[
+	 {"tag_name":"v2.0.0-beta.9","draft":true,"published_at":"2026-10-05T00:00:00Z","html_url":"https://x/9","assets":[]},
+	 {"tag_name":"v2.0.0-beta.2","draft":false,"prerelease":true,"published_at":"2026-10-02T00:00:00Z","html_url":"https://x/2","assets":[{"name":"repo-keeper_2.0.0-beta.2_linux_amd64.tar.gz","browser_download_url":"https://x/a.tgz","download_count":7},{"name":"checksums.txt.sig","browser_download_url":"https://x/s","download_count":1}]},
+	 {"tag_name":"v2.0.0-beta.1","draft":false,"published_at":"2026-10-01T00:00:00Z","html_url":"https://x/1","assets":[]}]`
+	if err := os.WriteFile(rel, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	b := realBuild(t, rel)
+	if err := b.generate(); err != nil {
+		t.Fatal(err)
+	}
+	read := func(f string) string {
+		d, _ := os.ReadFile(filepath.Join(b.Out, f)) //nolint:gosec // temp output
+		return string(d)
+	}
+	if h := read("install.html"); !strings.Contains(h, "v2.0.0-beta.2") || strings.Contains(h, "v2.0.0-beta.9") || strings.Contains(h, "No release is published yet") {
+		t.Errorf("must pin the newest PUBLISHED release: %.400s", h)
+	}
+	if s := read("install.sh"); !strings.Contains(s, `:-2.0.0-beta.2}`) {
+		t.Errorf("script pinned to the wrong release")
+	}
+	c := read("changelog.html")
+	if !strings.Contains(c, `href="https://x/a.tgz"`) || strings.Contains(c, "https://x/s\"") || !strings.Contains(c, "pre-release") || strings.Contains(c, "v2.0.0-beta.9") {
+		t.Errorf("downloads table wrong (drafts hidden, signature files folded away): %.600s", c)
+	}
+	if s := read("stats.html"); !strings.Contains(s, "2 published releases") || !strings.Contains(s, "8 file downloads") {
+		t.Errorf("release statistics wrong: %.500s", s)
 	}
 }

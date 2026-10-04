@@ -5,6 +5,7 @@ All notable changes are listed here. Versions follow [SemVer](https://semver.org
 ## Unreleased
 
 ### Added
+- **Install one-liners for Linux**: a verified installer (`install.sh`, published on the documentation site with its SHA-256) that downloads one pinned release, checks the cosign signature (identity pinned to the release workflow and the exact tag) and the archive SHA-256, and installs to `~/.local/bin` only if everything passes; plus Nix commands and ready-to-paste `.deb`/`.rpm` commands. See the Install page.
 - **Documentation site** (`tools/site`, `make site`): the project documentation as a static site, with the command-line reference and starter configuration generated from the binary, statistics (size, tests, coverage, dependencies, releases) and release downloads. Built and link-checked by CI, published to GitHub Pages from `main`.
 
 ### Changed
