@@ -250,3 +250,27 @@ func TestParse_Accounts_AzureDevOps_NeedsBaseURL(t *testing.T) {
 		t.Fatalf("rejected: %v", err)
 	}
 }
+
+func TestParse_Accounts_GenericGit(t *testing.T) {
+	root := "[general]\nroot = \"/r\"\n[[account]]\nname=\"g\"\nprovider=\"git\"\n"
+	if _, err := Parse([]byte(root)); err == nil || !strings.Contains(err.Error(), "urls is empty") {
+		t.Fatalf("no urls: %v", err)
+	}
+	if _, err := Parse([]byte(root + "urls=[\"git@git.example.com:team/app.git\", \"https://git.example.com/team/tools.git\"]\n")); err != nil {
+		t.Fatalf("valid generic account rejected: %v", err)
+	}
+	if _, err := Parse([]byte(root + "urls=[\"https://bob:pw@git.example.com/a.git\"]\n")); err == nil || strings.Contains(err.Error(), "pw@") {
+		t.Fatalf("password URL must be refused without echoing it: %v", err)
+	}
+	two := "urls=[\"https://a.example.com/x/y.git\", \"https://b.example.com/x/y.git\"]\n"
+	if _, err := Parse([]byte(root + two)); err != nil {
+		t.Fatalf("two hosts without a credential file is fine (the keychain case is checked when the account is built): %v", err)
+	}
+	if _, err := Parse([]byte(root + two + "token_file=\"/run/secrets/t\"\n")); err == nil || !strings.Contains(err.Error(), "several hosts") {
+		t.Fatalf("a token file with several https hosts must be refused: %v", err)
+	}
+	other := "[general]\nroot = \"/r\"\n[[account]]\nname=\"g\"\nprovider=\"github\"\nurls=[\"https://x/y.git\"]\n"
+	if _, err := Parse([]byte(other)); err == nil || !strings.Contains(err.Error(), "only applies to provider") {
+		t.Fatalf("urls on another provider: %v", err)
+	}
+}

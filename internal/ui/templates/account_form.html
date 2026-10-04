@@ -39,10 +39,14 @@
     <input name="token_file" type="text" size="50" value="{{.Form.TokenFile}}" aria-label="Token file path" placeholder="/run/secrets/github-token (mode 600)"></p>
   <p><label><input type="radio" name="auth" value="env"{{if eq .Form.Auth "env"}} checked{{end}}> Read the token from an environment variable of the daemon</label><br>
     <input name="token_env" type="text" size="30" value="{{.Form.TokenEnv}}" aria-label="Environment variable name" placeholder="GITHUB_TOKEN"></p>
+  <p><label><input type="radio" name="auth" value="none"{{if eq .Form.Auth "none"}} checked{{end}}> No credential (generic git only: SSH keys or public repositories)</label></p>
 </fieldset>
 
 <fieldset class="panel">
   <legend>Which repositories</legend>
+  <p><label for="urls">Repository URLs (generic git only)</label><br>
+    <textarea id="urls" name="urls" rows="4" cols="60" spellcheck="false" placeholder="git@git.example.com:team/app.git&#10;https://git.example.com/team/tools.git">{{.Form.URLs}}</textarea>
+    <span class="muted"><br>One clone URL per line (https or ssh), never with a password inside. Repositories land in <code>git/&lt;host&gt;/&lt;path&gt;</code>. There is no platform API, so cleanup uses only what git can prove (merged into the default branch).</span></p>
   <p><label for="include">Include</label><br>
     <textarea id="include" name="include" rows="4" cols="40" spellcheck="false" placeholder="me/*&#10;my-org/**">{{.Form.Include}}</textarea>
     <label for="exclude">Exclude</label><br>

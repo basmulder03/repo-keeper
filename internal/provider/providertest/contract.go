@@ -32,6 +32,9 @@ type Case struct {
 	MergedRepo     provider.Repo
 	MergedBranches []string
 	WantMerged     map[string]string
+	// Static marks a provider with no platform API (generic git): no credential, no PR data, nothing to cancel.
+	// The auth, merged-branch and cancellation cases are skipped; WantMerged must be empty.
+	Static bool
 }
 
 // asDaemonCalls keeps only what the daemon passes to MergedBranches (FullName); providers must not rely on anything else.
@@ -57,6 +60,9 @@ func Run(t *testing.T, c Case) {
 	})
 
 	t.Run("bad token is ErrAuth and never echoed", func(t *testing.T) {
+		if c.Static {
+			t.Skip("static provider: no credential")
+		}
 		const bad = "CANARY-bad-token-value"
 		p := c.New(t, bad)
 		for name, call := range map[string]func() error{
@@ -117,6 +123,13 @@ func Run(t *testing.T, c Case) {
 	})
 
 	t.Run("merged branches ignore forks and unmerged PRs", func(t *testing.T) {
+		if c.Static {
+			got, err := c.New(t, c.GoodToken).MergedBranches(ctx, asDaemonCalls(c.MergedRepo), c.MergedBranches)
+			if err != nil || len(got) != 0 {
+				t.Fatalf("a static provider has no PR data and must say so without failing: %v %v", got, err)
+			}
+			return
+		}
 		got, err := c.New(t, c.GoodToken).MergedBranches(ctx, asDaemonCalls(c.MergedRepo), c.MergedBranches)
 		if err != nil {
 			t.Fatal(err)
@@ -132,6 +145,9 @@ func Run(t *testing.T, c Case) {
 	})
 
 	t.Run("cancelled context fails fast", func(t *testing.T) {
+		if c.Static {
+			t.Skip("static provider: no I/O")
+		}
 		cctx, cancel := context.WithCancel(ctx)
 		cancel()
 		done := make(chan error, 1)
