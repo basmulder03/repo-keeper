@@ -25,6 +25,7 @@
 </div></header>
 {{end}}
 <main id="main">
+{{if and .Info.UpdateVersion (not .Anon)}}<p class="flash {{if .Info.UpdateUrgent}}err{{else}}ok{{end}}" role="status">Version {{.Info.UpdateVersion}} is available{{if .Info.UpdateUrgent}}, <strong>with a security fix</strong>{{end}}.{{if .Info.UpdateURL}} <a href="{{.Info.UpdateURL}}" rel="noopener noreferrer">What changed</a>.{{end}} To update, run <code>repo-keeper update</code> in a terminal; this interface cannot install updates.</p>{{end}}
 {{if .Msg}}<p class="flash ok" role="status">{{.Msg}}</p>{{end}}
 {{template "content" .}}
 </main>

@@ -72,6 +72,8 @@ func (a *app) run(ctx context.Context, args []string) int {
 		return a.cmdDiscover(ctx, rest)
 	case "doctor":
 		return a.cmdDoctor(ctx, rest)
+	case "update":
+		return a.cmdUpdate(ctx, rest)
 	case "version", "--version", "-v":
 		a.printf("repo-keeper %s (%s)\n", version, commit)
 		return 0
@@ -102,6 +104,7 @@ Commands:
   restore <repo> <branch>       bring back a branch deleted by cleanup (kept 30 days)
   audit                         show the journal of deletions, restores and blocked cleanups
   doctor                        check git version and state directory
+  update                        check for a newer release; --apply installs it (tarball installs, asks first)
   version                       print version
 
 Run "repo-keeper <command> -h" for flags.
