@@ -34,6 +34,9 @@ type Case struct {
 	WantMerged     map[string]string
 }
 
+// asDaemonCalls keeps only what the daemon passes to MergedBranches (FullName); providers must not rely on anything else.
+func asDaemonCalls(r provider.Repo) provider.Repo { return provider.Repo{FullName: r.FullName} }
+
 // Run executes the contract.
 func Run(t *testing.T, c Case) {
 	t.Helper()
@@ -59,7 +62,10 @@ func Run(t *testing.T, c Case) {
 		for name, call := range map[string]func() error{
 			"CheckAuth": func() error { _, err := p.CheckAuth(ctx); return err },
 			"ListRepos": func() error { _, err := p.ListRepos(ctx); return err },
-			"Merged":    func() error { _, err := p.MergedBranches(ctx, c.MergedRepo, c.MergedBranches); return err },
+			"Merged": func() error {
+				_, err := p.MergedBranches(ctx, asDaemonCalls(c.MergedRepo), c.MergedBranches)
+				return err
+			},
 		} {
 			err := call()
 			if !errors.Is(err, provider.ErrAuth) {
@@ -111,7 +117,7 @@ func Run(t *testing.T, c Case) {
 	})
 
 	t.Run("merged branches ignore forks and unmerged PRs", func(t *testing.T) {
-		got, err := c.New(t, c.GoodToken).MergedBranches(ctx, c.MergedRepo, c.MergedBranches)
+		got, err := c.New(t, c.GoodToken).MergedBranches(ctx, asDaemonCalls(c.MergedRepo), c.MergedBranches)
 		if err != nil {
 			t.Fatal(err)
 		}

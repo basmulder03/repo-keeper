@@ -203,15 +203,16 @@ func (g *gt) ListRepos(ctx context.Context) ([]provider.Repo, error) {
 
 // MergedBranches implements provider.Provider.
 func (g *gt) MergedBranches(ctx context.Context, repo provider.Repo, branches []string) (map[string]string, error) {
-	if len(repo.Namespace) != 1 {
-		return nil, fmt.Errorf("gitea: unexpected namespace in %q", repo.FullName)
+	owner, name, ok := splitFullName(repo.FullName) // the daemon passes only FullName
+	if !ok {
+		return nil, fmt.Errorf("gitea: unexpected repository name %q", repo.FullName)
 	}
 	want := map[string]bool{}
 	for _, b := range branches {
 		want[b] = true
 	}
 	found := map[string]string{}
-	target := g.endpoint("state=closed&sort=recentupdate&limit="+strconv.Itoa(pageSize), "repos", repo.Namespace[0], repo.Name, "pulls")
+	target := g.endpoint("state=closed&sort=recentupdate&limit="+strconv.Itoa(pageSize), "repos", owner, name, "pulls")
 	for page := 0; target != "" && page < prPages && len(found) < len(want); page++ {
 		resp, err := g.get(ctx, target)
 		if err != nil {
@@ -247,4 +248,10 @@ func (g *gt) MergedBranches(ctx context.Context, repo provider.Repo, branches []
 		target = next(resp.Header)
 	}
 	return found, nil
+}
+
+// splitFullName returns owner and name of an "owner/name" repository, and false for anything else.
+func splitFullName(full string) (owner, name string, ok bool) {
+	owner, name, ok = strings.Cut(full, "/")
+	return owner, name, ok && owner != "" && name != "" && !strings.Contains(name, "/")
 }

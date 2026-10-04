@@ -159,7 +159,7 @@ func TestListRepos_RefusesPaginationToForeignHost(t *testing.T) {
 
 func TestMergedBranches_RejectsUnexpectedNamespace(t *testing.T) {
 	p := newProv(t, fakeGitea(t), provider.Gitea, good)
-	if _, err := p.MergedBranches(t.Context(), provider.Repo{FullName: "a/b/c", Namespace: []string{"a", "b"}, Name: "c"}, []string{"x"}); err == nil {
+	if _, err := p.MergedBranches(t.Context(), provider.Repo{FullName: "a/b/c"}, []string{"x"}); err == nil {
 		t.Fatal("nested namespace must be refused, not mis-addressed")
 	}
 }
