@@ -240,3 +240,13 @@ func TestParse_Accounts_BitbucketAccepted_BaseURLOptional(t *testing.T) {
 		t.Fatalf("bitbucket rejected: %v", err)
 	}
 }
+
+func TestParse_Accounts_AzureDevOps_NeedsBaseURL(t *testing.T) {
+	root := "[general]\nroot = \"/r\"\n[[account]]\nname=\"a\"\nprovider=\"azuredevops\"\n"
+	if _, err := Parse([]byte(root)); err == nil || !strings.Contains(err.Error(), "base_url is required") {
+		t.Fatalf("err=%v", err)
+	}
+	if _, err := Parse([]byte(root + "base_url=\"https://dev.azure.com/acme\"\n")); err != nil {
+		t.Fatalf("rejected: %v", err)
+	}
+}

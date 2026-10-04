@@ -35,6 +35,8 @@ const (
 	Forgejo Kind = "forgejo"
 	// Bitbucket is Bitbucket Cloud.
 	Bitbucket Kind = "bitbucket"
+	// AzureDevOps is Azure DevOps Services and Server.
+	AzureDevOps Kind = "azuredevops"
 )
 
 // ErrAuth means the credential is missing, revoked or expired; retrying will not help until it is replaced.
@@ -172,7 +174,8 @@ func Matches(include, exclude []string, r Repo) bool {
 	return len(include) == 0 || hit(include)
 }
 
-var safeSegment = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+// Interior spaces are allowed (Azure DevOps project and repository names have them); leading and trailing ones are not.
+var safeSegment = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9._ -]*[A-Za-z0-9_-])?$`)
 
 // LocalPath maps a repo to <root>/<kind>/<namespace...>/<name> and refuses anything that could escape root.
 func LocalPath(root string, k Kind, r Repo) (string, error) {
