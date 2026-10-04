@@ -55,7 +55,11 @@ func TestLocalPath(t *testing.T) {
 	if err != nil || deep != filepath.Join(root, "gitlab", "g", "sub", "leaf") {
 		t.Fatalf("deep=%q err=%v", deep, err)
 	}
-	for _, bad := range []string{"../evil", "a/..", "a/.", "a/-rf", "a/na me", "a/x.", "./a/b", "a/b\x00"} {
+	spaced, err := LocalPath(root, "azuredevops", repo("My Project/my repo"))
+	if err != nil || spaced != filepath.Join(root, "azuredevops", "My Project", "my repo") {
+		t.Fatalf("interior spaces must work: %q err=%v", spaced, err)
+	}
+	for _, bad := range []string{"../evil", "a/..", "a/.", "a/-rf", "a/ lead", "a/trail ", "a/x.", "a/ ", "./a/b", "a/b\x00", "a/b\tc", "a/b\nc", "a/b .", "a/.. x"} {
 		if _, err := LocalPath(root, GitHub, repo(bad)); err == nil {
 			t.Errorf("%q must be rejected", bad)
 		}
