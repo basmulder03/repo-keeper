@@ -1,4 +1,4 @@
-# Beta testing guide (0.1.0-beta.1)
+# Beta testing guide
 
 Thank you for testing. repo-keeper is designed so that a mistake costs little: it only ever changes **local** clones, cleanup is **dry-run** until you switch it on, and every deletion is recoverable. Still, start small.
 
@@ -29,7 +29,7 @@ nix profile install path:/home/you/Development/github/you/repo-keeper
 
 **Debian / Fedora / tarball:** see [INSTALL.md](INSTALL.md). Verify `checksums.txt` with `sha256sum --check` (signing starts with the first published release).
 
-Check: `repo-keeper version` prints `0.1.0-beta.1`, and `repo-keeper doctor` is all `ok`.
+Check: `repo-keeper version` prints the version you installed (see `VERSION` and the changelog), and `repo-keeper doctor` is all `ok`.
 
 ## 2. Phase one: look, don't touch (15 minutes)
 

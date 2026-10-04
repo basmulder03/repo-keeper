@@ -2,6 +2,11 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
+## Unreleased
+
+### Changed
+- Release process: the version now lives in one file (`VERSION`); the Nix package reads it, and CI and the release workflow fail when the tag, `VERSION`, the changelog or the flake disagree. `make release-prep NEW=x.y.z` does the bump (docs/RELEASING.md).
+
 ## 0.1.0-beta.5
 
 ### Added
