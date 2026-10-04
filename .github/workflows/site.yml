@@ -36,7 +36,8 @@ jobs:
           cd tools/site && go run . -repo ../.. -bin "$RUNNER_TEMP/repo-keeper" -coverage "$RUNNER_TEMP/coverage.out"
           -releases "$RUNNER_TEMP/releases.json" -repo-url "https://github.com/$GITHUB_REPOSITORY" -out "$RUNNER_TEMP/_site"
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with: { path: ${{ runner.temp }}/_site }
+        with:
+          path: ${{ runner.temp }}/_site
   deploy:
     # only the default branch, tags and published releases go live; a pull request only proves the site builds
     if: github.event_name != 'pull_request'
@@ -47,7 +48,7 @@ jobs:
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      url: "${{ steps.deploy.outputs.page_url }}"
     steps:
       - id: deploy
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
