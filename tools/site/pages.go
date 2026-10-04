@@ -18,7 +18,7 @@ var sections = []string{"Start", "Reference", "Design", "Project"}
 func pageList() []page {
 	return []page{
 		{Slug: "index", Title: "Overview", Section: "Start", Source: "README.md", Summary: "What repo-keeper is and how to try it."},
-		{Slug: "install", Title: "Install", Section: "Start", Source: "docs/INSTALL.md", Summary: "Nix, Home Manager, packages and the tarball."},
+		{Slug: "install", Title: "Install", Section: "Start", Source: "docs/INSTALL.md", Summary: "Nix, Home Manager, packages and the tarball.", gen: genInstall},
 		{Slug: "beta", Title: "Beta guide", Section: "Start", Source: "docs/BETA.md", Summary: "Test it safely: look first, sync one thing, clean last."},
 		{Slug: "cli", Title: "Command line", Section: "Reference", Summary: "Every command and flag, generated from the binary.", gen: genCLI},
 		{Slug: "config", Title: "Configuration", Section: "Reference", Summary: "The starter configuration, generated from the binary.", gen: genConfig},

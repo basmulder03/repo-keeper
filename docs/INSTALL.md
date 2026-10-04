@@ -2,6 +2,31 @@
 
 repo-keeper runs as a per-user background service (no root, no system service). Linux is the supported platform; Windows and macOS builds are not published until they can be code-signed.
 
+## Quick install
+
+Every route below verifies what it installs. None needs root except the distribution packages.
+
+**Nix** (try it, or install it; add `/v0.1.0-beta.5`-style tags to pin a release):
+
+```sh
+nix run github:basmulder03/repo-keeper -- version
+nix profile add github:basmulder03/repo-keeper
+```
+
+**Any Linux, amd64 or arm64** (verified tarball installer, installs to `~/.local/bin`):
+
+```sh
+curl -fsSLo install.sh https://basmulder03.github.io/repo-keeper/install.sh
+sha256sum install.sh        # compare with the checksum on the Install page of the site
+sh install.sh
+```
+
+The script downloads one pinned release, verifies the cosign signature of `checksums.txt` (identity pinned to this repository's release workflow *and* to that exact tag, so an older signed release cannot be replayed) and the SHA-256 of the archive, and only then installs. If any check fails nothing is installed. It needs `curl`, `tar` and `cosign`; without cosign it refuses unless you pass `--skip-signature`, which still checks the SHA-256 but says loudly that the signature was not checked. Options: `--version X.Y.Z`, `--prefix DIR` (units are only installed for the default `~/.local`), `--no-units`. systemd user units are copied but never enabled for you.
+
+The shorter `curl -fsSL https://basmulder03.github.io/repo-keeper/install.sh | sh` works too, but then the script itself arrives unverified; the read-first form above lets you check it against the published checksum. macOS and Windows have no installer yet (builds are not published until they can be signed).
+
+Debian, Ubuntu and Fedora packages are in the next sections; the Install page of the documentation site shows ready-to-paste commands pinned to the newest published release.
+
 ## NixOS / Nix
 
 ```nix
