@@ -33,6 +33,8 @@ const (
 	Gitea Kind = "gitea"
 	// Forgejo is Forgejo, including Codeberg.
 	Forgejo Kind = "forgejo"
+	// Bitbucket is Bitbucket Cloud.
+	Bitbucket Kind = "bitbucket"
 )
 
 // ErrAuth means the credential is missing, revoked or expired; retrying will not help until it is replaced.

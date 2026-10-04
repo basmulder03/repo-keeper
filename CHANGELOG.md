@@ -2,6 +2,11 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
+## Unreleased
+
+### Added
+- **Bitbucket Cloud support** (`provider = "bitbucket"`): discovery across all your workspaces, clone, fast-forward and safe cleanup via merged-PR lookup, using an Atlassian API token (Atlassian retired app passwords). Tested against fixtures only so far; see docs/PROVIDERS.md.
+
 ## 0.1.0-beta.3
 
 ### Fixed

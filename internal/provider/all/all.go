@@ -4,7 +4,8 @@
 package all
 
 import (
-	_ "github.com/basmulder03/repo-keeper/internal/provider/gitea"  // gitea, forgejo, codeberg
-	_ "github.com/basmulder03/repo-keeper/internal/provider/github" // github, GitHub Enterprise Server
-	_ "github.com/basmulder03/repo-keeper/internal/provider/gitlab" // gitlab.com, self-managed
+	_ "github.com/basmulder03/repo-keeper/internal/provider/bitbucket" // bitbucket cloud
+	_ "github.com/basmulder03/repo-keeper/internal/provider/gitea"     // gitea, forgejo, codeberg
+	_ "github.com/basmulder03/repo-keeper/internal/provider/github"    // github, GitHub Enterprise Server
+	_ "github.com/basmulder03/repo-keeper/internal/provider/gitlab"    // gitlab.com, self-managed
 )

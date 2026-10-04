@@ -95,7 +95,7 @@ type UI struct {
 // Account is a platform login whose repositories are discovered and cloned automatically.
 type Account struct {
 	Name     string `toml:"name,omitempty"`
-	Provider string `toml:"provider,omitempty"` // github | gitlab | gitea | forgejo
+	Provider string `toml:"provider,omitempty"` // github | gitlab | gitea | forgejo | bitbucket
 	BaseURL  string `toml:"base_url,omitempty"` // API base: GHES https://ghe.example.com/api/v3, GitLab https://gitlab.example.com, Gitea/Forgejo https://git.example.com (required); default is the public cloud
 	CAFile   string `toml:"ca_file,omitempty"`  // PEM bundle with the private CA of a self-hosted instance (absolute path)
 	// Credential source; with neither set the OS keychain entry "account/<name>" is used.
