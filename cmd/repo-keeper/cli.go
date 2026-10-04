@@ -20,6 +20,7 @@ import (
 	"github.com/basmulder03/repo-keeper/internal/paths"
 	"github.com/basmulder03/repo-keeper/internal/secrets"
 	"github.com/basmulder03/repo-keeper/internal/syncer"
+	"github.com/basmulder03/repo-keeper/internal/update"
 )
 
 // app carries injectable dependencies so commands are testable without touching the real HOME.
@@ -31,6 +32,7 @@ type app struct {
 	clock       clock.Clock
 	openBrowser func(url string) error
 	reexec      func() error // replaces the process after a requested restart (stubbed in tests)
+	upd         updateEnv    // see update.go
 }
 
 const trashRetention = 30 * 24 * time.Hour
@@ -327,6 +329,13 @@ func (a *app) cmdDoctor(ctx context.Context, _ []string) int {
 		code = 1
 	} else {
 		a.printf("ok   state dir %s writable\n", dir)
+		st := update.ReadState(dir)
+		switch n := updateNotice(st, version); {
+		case n != "":
+			a.printf("warn %s\n", n)
+		case !st.Checked.IsZero():
+			a.printf("ok   update check: no newer release (checked %s)\n", st.Checked.Local().Format("2006-01-02 15:04"))
+		}
 	}
 	return code
 }

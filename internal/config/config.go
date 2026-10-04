@@ -66,6 +66,7 @@ type Config struct {
 	Repos    []Repo    `toml:"repo,omitempty"`
 	Accounts []Account `toml:"account,omitempty"`
 	UI       UI        `toml:"ui,omitempty"`
+	Update   Update    `toml:"update,omitempty"`
 }
 
 // General holds scheduling behaviour.
@@ -86,6 +87,12 @@ type Cleanup struct {
 	MinAge           Duration `toml:"min_age,omitempty" render:"always"` // 0 is meaningful here (the default is 7d), so it is always written
 	Protected        []string `toml:"protected,omitempty"`
 	AllowNeverPushed bool     `toml:"allow_never_pushed,omitempty"`
+}
+
+// Update configures the release check. Applying an update is never configurable: it only ever happens through the
+// explicit `repo-keeper update --apply` command (ADR-0021).
+type Update struct {
+	Check *bool `toml:"check,omitempty"` // default true: look for a newer release about once a day and only tell the user
 }
 
 // UI configures the local web interface.
@@ -349,6 +356,11 @@ mode = "dry-run"        # off | dry-run | auto. Only local branches are ever tou
 min_age = "168h"        # never delete branches whose newest commit is younger than this
 protected = ["main", "master", "trunk", "develop", "dev", "staging", "production", "release/*", "hotfix/*"]
 
+# Once a day repo-keeper asks GitHub whether a newer release exists (one anonymous request, nothing about you is
+# sent) and tells you in "status", "doctor" and the web interface. It never installs anything by itself.
+# [update]
+# check = false         # opt out of the check
+
 # [[repo]]
 # path = "/home/you/code/project"
 # cleanup = "auto"      # per-repo override
@@ -433,6 +445,9 @@ func (c Config) ResolveAccount(a Account) AccountSettings {
 	}
 	return s
 }
+
+// UpdateCheck reports whether the daily check for a newer release is enabled (the default).
+func (c Config) UpdateCheck() bool { return c.Update.Check == nil || *c.Update.Check }
 
 // UIEnabled reports whether the web UI should start.
 func (c Config) UIEnabled() bool { return c.UI.Enabled == nil || *c.UI.Enabled }

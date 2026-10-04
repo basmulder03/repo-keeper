@@ -24,6 +24,10 @@ type Info struct {
 	StateDir   string
 	UIAddr     string
 	Started    time.Time
+	// UpdateVersion is set when the daily check found a newer release. The interface only tells; it can never
+	// install anything (ADR-0021).
+	UpdateVersion, UpdateURL string
+	UpdateUrgent             bool
 }
 
 // CleanupView is one repository's latest cleanup evaluation.

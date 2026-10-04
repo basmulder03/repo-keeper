@@ -101,6 +101,20 @@ sha256sum --check --ignore-missing checksums.txt
 gh attestation verify repo-keeper_*_linux_amd64.tar.gz --repo basmulder03/repo-keeper
 ```
 
+## Updating
+
+repo-keeper checks about once a day whether a newer release exists (one anonymous request to the GitHub releases API; turn it off with `[update] check = false`) and tells you in `repo-keeper status`, `repo-keeper doctor` and the web interface, flagging releases that contain a security fix. It never installs anything by itself.
+
+```sh
+repo-keeper update            # same as --check: what exists, and the evidence to verify it
+repo-keeper update --apply    # download, verify, ask, install (tarball installs only)
+repo-keeper update --rollback # put back the version kept before the last update
+```
+
+`update` prints the release URL and notes, the exact asset URL, the expected SHA-256, the certificate identity and issuer the signature was checked against, the source commit and the build's workflow run, and the commands to repeat every check yourself. `--apply` needs `cosign`, a terminal and your explicit "y" (the default is No; there is no flag, setting or environment variable that skips the question), refuses unless the signature and the SHA-256 both pass, keeps the previous binary next to the new one, and never restarts the daemon for you: run `repo-keeper restart` when you are ready. `--version X` installs exactly that release, which is also how you downgrade.
+
+Installs owned by a package manager do not update themselves: Nix (`nix profile upgrade repo-keeper`, or bump your flake input / Home Manager), `.deb`/`.rpm` (install the newer package), Homebrew, containers. `update` recognises them, says so and prints the right command.
+
 ## First run
 
 1. `repo-keeper init` writes a starter config.
