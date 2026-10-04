@@ -4,7 +4,11 @@ All notable changes are listed here. Versions follow [SemVer](https://semver.org
 
 ## Unreleased
 
+### Added
+- **Documentation site** (`tools/site`, `make site`): the project documentation as a static site, with the command-line reference and starter configuration generated from the binary, statistics (size, tests, coverage, dependencies, releases) and release downloads. Built and link-checked by CI, published to GitHub Pages from `main`.
+
 ### Changed
+- The usage text no longer promises "later milestones" and its command column is aligned.
 - Release process: the version now lives in one file (`VERSION`); the Nix package reads it, and CI and the release workflow fail when the tag, `VERSION`, the changelog or the flake disagree. `make release-prep NEW=x.y.z` does the bump (docs/RELEASING.md).
 
 ## 0.1.0-beta.5

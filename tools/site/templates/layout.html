@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · repo-keeper</title>
+{{if .Summary}}<meta name="description" content="{{.Summary}}">{{end}}
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="site.css">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <a class="brand" href="index.html"><img src="icon.svg" alt="" width="28" height="28"><span>repo-keeper</span></a>
+  <span class="meta">v{{.Version}}</span>
+  <a class="gh" href="{{.RepoURL}}">GitHub</a>
+</header>
+<div class="layout">
+<nav class="side" aria-label="Documentation">
+{{range .Nav}}<h2>{{.Name}}</h2>
+<ul>{{range .Pages}}<li><a href="{{.Slug}}.html"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a></li>{{end}}</ul>
+{{end}}</nav>
+<main id="main">
+{{if .ShowTitle}}<h1>{{.Title}}</h1>{{if .Summary}}<p class="lede">{{.Summary}}</p>{{end}}{{end}}
+{{.Content}}
+{{if .Cards}}<h2 id="topics">Topics</h2>
+<ul class="cards">{{range .Cards}}<li><a href="{{.Slug}}.html"><strong>{{.Title}}</strong><span>{{.Summary}}</span></a></li>{{end}}</ul>{{end}}
+</main>
+</div>
+<footer class="foot">
+  <span>repo-keeper {{.Version}} · built from <a href="{{.RepoURL}}/commit/{{.Commit}}"><code>{{.Commit}}</code></a> on {{.Date}}</span>
+  {{if .Edit}}<a href="{{.Edit}}">Edit this page on GitHub</a>{{end}}
+</footer>
+</body>
+</html>

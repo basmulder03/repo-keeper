@@ -5,7 +5,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-.PHONY: build test lint security fmt tidy gen check snapshot repro coverage fuzz perf version release-prep
+.PHONY: build test lint security fmt tidy gen check snapshot repro coverage fuzz perf version release-prep site
 .DEFAULT_GOAL := build
 
 build: ## static binary in ./bin
@@ -25,10 +25,12 @@ perf: build ## 500-repo synthetic fleet vs. the NFR-1/NFR-3 budgets
 
 lint:
 	golangci-lint run ./...
+	cd tools/site && golangci-lint run --config ../../.golangci.yml ./...
 
 security: ## vulnerabilities + static security analysis
 	govulncheck ./...
 	gosec -quiet ./...
+	cd tools/site && govulncheck ./... && gosec -quiet ./...
 
 fmt:
 	gofmt -w .
@@ -53,3 +55,6 @@ version: ## check that VERSION, the changelog and the flake agree
 release-prep: ## bump VERSION and the changelog heading: make release-prep NEW=0.1.0-beta.6
 	@test -n "$(NEW)" || { echo "usage: make release-prep NEW=<version>"; exit 2; }
 	./scripts/release-prep.sh $(NEW)
+
+site: build ## build the documentation site into ./_site (the pipeline publishes it)
+	cd tools/site && go test ./... && go run . -repo ../.. -bin ../../bin/repo-keeper $(if $(wildcard coverage.out),-coverage ../../coverage.out) -out ../../_site
