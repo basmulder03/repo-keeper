@@ -52,6 +52,8 @@ type Daemon struct {
 	Log        *slog.Logger
 	// Tick overrides the scheduler poll interval (tests).
 	Tick time.Duration
+	// UpdateAPI overrides the GitHub API root of the release check (tests only).
+	UpdateAPI string
 	// NoUI disables the web interface; EphemeralUI binds any free port instead of the configured one (tests).
 	NoUI        bool
 	EphemeralUI bool
@@ -209,6 +211,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	d.Log.Info("daemon started", "repos", len(cfg.Repos), "accounts", len(cfg.Accounts), "config", d.ConfigPath, "state", d.StateDir)
 	go d.reloadLoop(ctx, cfg)
 	go d.discoveryLoop(ctx)
+	go d.updateLoop(ctx)
 	err = d.Sched.Run(ctx)
 	d.Log.Info("daemon stopped")
 	if errors.Is(err, context.Canceled) {

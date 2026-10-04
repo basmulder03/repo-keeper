@@ -274,3 +274,33 @@ func TestParse_Accounts_GenericGit(t *testing.T) {
 		t.Fatalf("urls on another provider: %v", err)
 	}
 }
+
+func TestParse_Update_CheckDefaultsOnAndCanBeTurnedOff_NothingElseIsAccepted(t *testing.T) {
+	c, err := Parse([]byte("[general]\nroot = \"/r\"\n"))
+	if err != nil || !c.UpdateCheck() {
+		t.Fatalf("default must be on: %v %v", c.UpdateCheck(), err)
+	}
+	c, err = Parse([]byte("[update]\ncheck = false\n"))
+	if err != nil || c.UpdateCheck() {
+		t.Fatalf("opt-out ignored: %v %v", c.UpdateCheck(), err)
+	}
+	c, err = Parse([]byte("[update]\ncheck = true\n"))
+	if err != nil || !c.UpdateCheck() {
+		t.Fatalf("explicit on: %v %v", c.UpdateCheck(), err)
+	}
+	// applying is not configurable: there is no key that could ever turn on automatic updates
+	for _, key := range []string{"apply = true", "auto = true", "auto_apply = true", "yes = true", "channel = \"x\""} {
+		if _, err := Parse([]byte("[update]\n" + key + "\n")); err == nil {
+			t.Errorf("[update] %s must be rejected as an unknown key", key)
+		}
+	}
+}
+
+func TestStarter_MentionsTheOptOutAndStillParses(t *testing.T) {
+	if _, err := Parse([]byte(Starter)); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(Starter, "[update]") || !strings.Contains(Starter, "check = false") || !strings.Contains(Starter, "never installs anything by itself") {
+		t.Fatal("the starter config must document the check and its opt-out")
+	}
+}

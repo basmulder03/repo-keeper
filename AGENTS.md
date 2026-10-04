@@ -14,7 +14,7 @@ Project: a lightweight local daemon + small web UI that syncs git repos from man
 5. **UI is loopback-only**; never add CORS, external assets, inline scripts, or disable CSRF/Host checks.
 6. Tests never touch the real `$HOME`, keychain, network, or real provider; use `t.TempDir()`, fakes, `httptest`.
 7. Do not add dependencies without justification (license, maintenance, size); prefer stdlib.
-8. Never use UPX/obfuscation. No self-update or download-and-execute behaviour, with one narrow exception (ADR-0021): `repo-keeper update --apply`, run by the user, on a plain tarball install only, after signature and checksum verification. No daemon, scheduler, UI, tray, service, timer, config option or environment variable may ever apply an update; update *checks* run by default (opt-out) and only notify.
+8. Never use UPX/obfuscation. No self-update or download-and-execute behaviour, with one narrow exception (ADR-0021): `repo-keeper update --apply`, run by the user, on a plain tarball install only, after signature and checksum verification. No daemon, scheduler, UI, tray, service, timer, config option or environment variable may ever apply an update; update *checks* run by default (opt-out) and only notify. `internal/update/apply` may be imported only by `cmd/repo-keeper/update.go`; `internal/update/isolation_test.go` enforces it (ADR-0022).
 
 ## Style
 - Go idioms; small interfaces at the consumer; `context.Context` first; wrap errors with `%w`; `slog` only; inject `Clock`.
