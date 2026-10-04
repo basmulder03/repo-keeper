@@ -2,7 +2,7 @@
 
 A lightweight, local-first background agent that keeps every repository you can access on GitHub, GitLab, Bitbucket, Azure DevOps and Gitea/Forgejo cloned and up to date, safely.
 
-> **Status:** feature-complete for GitHub and GitLab on Linux (Gitea/Forgejo, Bitbucket Cloud and Azure DevOps added, fixture-tested): sync engine, safe cleanup, rate limiting, daemon, web UI, tray, packaging, hardening and fuzzing are done and measured. More providers (M6) and a beta soak are next. See [`docs/`](docs/README.md), [installation](docs/INSTALL.md), [security review](docs/SECURITY-REVIEW.md) and the [roadmap](docs/ROADMAP.md).
+> **Status:** beta. GitHub and GitLab are verified end to end; Gitea/Forgejo, Bitbucket Cloud, Azure DevOps and plain git remotes are implemented and fixture-tested but not yet verified against live servers. The sync engine, safe cleanup, rate limiting, daemon, web UI, tray, packaging, hardening and fuzzing are done and measured; the beta soak is next. See [`docs/`](docs/README.md), [installation](docs/INSTALL.md), [security review](docs/SECURITY-REVIEW.md) and the [roadmap](docs/ROADMAP.md).
 
 ## What it does
 

@@ -89,21 +89,21 @@ func usage(w io.Writer) {
 	_, _ = fmt.Fprint(w, `Usage: repo-keeper <command> [flags]
 
 Commands:
-  init                    write a starter configuration file
-  config validate         check the configuration file
-  daemon                  run the background service (scheduled syncs)
-  start | stop | restart  run the daemon detached in the background (no service manager needed)
-  status                  show tracked repositories and their last sync
-  ui                      open the web interface (signs in with a one-time link)
-  accounts add|list|check|rm manage platform logins (tokens live in the OS keychain)
-  discover                list what each account would clone (no changes)
-  sync <repo>             fetch, fast-forward the default branch, optionally clean merged branches
-  cleanup <repo>          evaluate/delete merged local branches (dry-run unless --cleanup=auto)
-  restore <repo> <branch> bring back a branch deleted by cleanup (kept 30 days)
-  audit                   show the journal of deletions, restores and blocked cleanups
-  doctor                  check git version and state directory
-  version                 print version
+  init                          write a starter configuration file
+  config validate               check the configuration file
+  daemon                        run the background service (scheduled syncs)
+  start | stop | restart        run the daemon detached in the background (no service manager needed)
+  status                        show tracked repositories and their last sync
+  ui                            open the web interface (signs in with a one-time link)
+  accounts add|list|check|rm    manage platform logins (tokens live in the OS keychain)
+  discover                      list what each account would clone (no changes)
+  sync <repo>                   fetch, fast-forward the default branch, optionally clean merged branches
+  cleanup <repo>                evaluate/delete merged local branches (dry-run unless --cleanup=auto)
+  restore <repo> <branch>       bring back a branch deleted by cleanup (kept 30 days)
+  audit                         show the journal of deletions, restores and blocked cleanups
+  doctor                        check git version and state directory
+  version                       print version
 
-Run "repo-keeper <command> -h" for flags. UI and provider discovery arrive in later milestones.
+Run "repo-keeper <command> -h" for flags.
 `)
 }
