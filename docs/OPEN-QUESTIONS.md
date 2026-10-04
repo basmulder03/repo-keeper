@@ -27,3 +27,6 @@ None. Remaining choices are implementation details tracked in issues.
 
 ## Gitea / Forgejo live verification
 The provider is fixture-tested only. Before 1.0: run discovery, clone and merged-branch lookup against a real Forgejo (Codeberg) and a Gitea instance, confirm `Authorization: token` and `Link` pagination behave as documented, and re-read each host's ToS/API policy.
+
+## Bitbucket Cloud live verification
+The provider is fixture-tested only. Before 1.0, with a real Bitbucket account: confirm the HTTPS git username for API tokens, the minimal scope set (`read:repository:bitbucket`, `read:pullrequest:bitbucket`, `read:user:bitbucket`, `read:workspace:bitbucket`) is sufficient for discovery, clone and the merged-PR lookup, whether `X-OAuth-Scopes` is sent for API tokens, and whether workspace/repository access tokens can work (they have no user, so discovery may need an explicit workspace list in the config). Re-read the rate-limit documentation and the Atlassian terms.

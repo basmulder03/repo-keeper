@@ -54,10 +54,12 @@
 - **Tactics:** keyset pagination, `membership=true`, `simple=true`, `statistics=false`.
 
 ## Bitbucket Cloud
-- **Docs:** Bitbucket Cloud REST API rate limiting, Atlassian ToS/AUP. Atlassian has been deprecating **app passwords** in favour of **API tokens**; target the current mechanism. *Last verified: TBD at M4.*
-- **Auth:** API token / repository or workspace access token; OAuth 2.0 consumer.
-- **Limits:** per-hour request limits with 429 + `Retry-After`; treat as low and cache aggressively.
-- Bitbucket Data Center: separate REST API; later milestone.
+
+**Implemented (M6, `bitbucket` kind; fixture-tested only).** Documented REST 2.0 only, checked against Atlassian's published OpenAPI document (`https://api.bitbucket.org/swagger.json`) on 2026-10-04: `GET /user` (auth; scopes from the `X-OAuth-Scopes` header when sent), `GET /user/workspaces` then `GET /repositories/{workspace}?role=member` (discovery: **Bitbucket has no cross-workspace repository listing**, so every workspace the user belongs to is walked and `next` links are followed, never constructed), `GET /repositories/{workspace}/{repo}/pullrequests?state=MERGED` (merged-PR lookup: source and destination repository must be the same, so fork PRs are ignored) and `GET /repositories/{workspace}/{repo}/commit/{hash}`. Pull requests report short commit hashes and cleanup compares exact ids, so the short hash is expanded through the commit endpoint; a hash that cannot be resolved to a full id is left out (fail closed).
+- **Auth:** an Atlassian **API token** sent as `Authorization: Bearer` (Bearer support for API tokens was announced 2026-08-18). **App passwords no longer work** (final removal 2026-07-28, per the Bitbucket changelog). Create the token with only `read:repository:bitbucket`, `read:pullrequest:bitbucket`, `read:user:bitbucket` and `read:workspace:bitbucket`. No OAuth device flow (Bitbucket has none); paste a token.
+- **Mapping:** workspaces are the single namespace level (`workspace/repo-slug`); projects are not a path level. Mercurial repositories (`scm` other than `git`) are skipped; a repository without a main branch is `Disabled` (empty); Bitbucket has no archive state. The `https` clone link Bitbucket returns embeds `user@`; it is stripped so the credential only ever comes from askpass.
+- **Limits:** Bitbucket enforces per-hour limits with 429 and `Retry-After`, honoured by the shared `httpx` layer. The exact numbers were not found in the machine-readable spec and are **unverified**; re-read the rate-limit page before 1.0.
+- **Not yet verified against a live account:** the git username for HTTPS (`x-bitbucket-api-token-auth`, from memory of Atlassian's docs), the exact scope names an API token needs for `/user/workspaces`, repository/workspace *access tokens* (they are not tied to a user, so `/user` and `/user/workspaces` may refuse them and discovery would need a different path), and the `X-OAuth-Scopes` header on API tokens. Tracked in OPEN-QUESTIONS; ToS pages not re-read for this change.
 
 ## Azure DevOps (Services / Server)
 - **Docs:** Rate and usage limits (resource-utilisation based, `Retry-After`, `X-RateLimit-*`/`X-RateLimit-Delay`), Microsoft ToS. *Last verified: TBD at M4.*

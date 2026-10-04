@@ -233,3 +233,10 @@ func TestParse_Accounts_GiteaForgejo_NeedBaseURL(t *testing.T) {
 		}
 	}
 }
+
+func TestParse_Accounts_BitbucketAccepted_BaseURLOptional(t *testing.T) {
+	root := "[general]\nroot = \"/r\"\n"
+	if _, err := Parse([]byte(root + "[[account]]\nname=\"bb\"\nprovider=\"bitbucket\"\ninclude=[\"acme/*\"]\n")); err != nil {
+		t.Fatalf("bitbucket rejected: %v", err)
+	}
+}

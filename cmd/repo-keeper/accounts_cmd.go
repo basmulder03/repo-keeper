@@ -108,7 +108,7 @@ func quoteList(l []string) string {
 func (a *app) accountsAdd(ctx context.Context, args []string) int {
 	fs := a.newFlagSet("accounts add")
 	cfgPath := fs.String("config", "", "config file")
-	prov := fs.String("provider", "github", "platform: github | gitlab | gitea | forgejo")
+	prov := fs.String("provider", "github", "platform: github | gitlab | gitea | forgejo | bitbucket")
 	base := fs.String("base-url", "", "API base URL (GitHub Enterprise: https://host/api/v3, self-managed GitLab: https://host)")
 	stdin := fs.Bool("token-stdin", false, "read the token from the first line of stdin")
 	device := fs.Bool("device", false, "log in with the OAuth device flow")
