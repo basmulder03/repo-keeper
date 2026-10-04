@@ -50,7 +50,7 @@ run() {
   local envs=() 
   while [ "$1" != "--" ]; do envs+=("$1"); shift; done; shift
   set +e
-  OUT=$(env HOME="$H" "${envs[@]}" PATH="$T/shim:$PATH" sh "$INSTALL" "$@" 2>&1); rc=$?
+  OUT=$(env -u XDG_CONFIG_HOME HOME="$H" "${envs[@]}" PATH="$T/shim:$PATH" sh "$INSTALL" "$@" 2>&1); rc=$?
   set -e
   if [ "$rc" -eq "$want" ]; then ok "$name (rc=$rc)"; else bad "$name: rc=$rc, want $want"; echo "$OUT" | sed 's/^/     /'; fi
 }
@@ -73,6 +73,10 @@ run "--no-units" 0 COSIGN_RC=0 -- --version "$V" --no-units
 run "custom prefix" 0 COSIGN_RC=0 -- --version "$V" --prefix "$T/custom"
 [ -x "$T/custom/bin/repo-keeper" ] && [ ! -e "$H/.config/systemd/user/repo-keeper.service" ] && ok "  installed under the prefix, units left alone" || bad "  prefix handling wrong"
 
+# units honour XDG_CONFIG_HOME
+run "XDG_CONFIG_HOME is honoured" 0 COSIGN_RC=0 "XDG_CONFIG_HOME=$T/xdg" -- --version "$V"
+[ -f "$T/xdg/systemd/user/repo-keeper.service" ] && [ ! -e "$H/.config/systemd/user/repo-keeper.service" ] && ok "  units went to XDG_CONFIG_HOME" || bad "  units not in XDG_CONFIG_HOME"
+
 # 5 signature failure installs nothing
 run "bad signature" 1 COSIGN_RC=1 -- --version "$V"
 expect_out "signature verification FAILED"; expect_none
@@ -88,7 +92,7 @@ reset_release
 
 # 8 no cosign => refuse; --skip-signature => warn and proceed
 mkdir -p "$T/nocosign"; for t in sh curl tar gzip awk cut mktemp rm cp chmod mv mkdir uname sha256sum sed grep cat ls env; do p=$(command -v "$t" || true); [ -n "$p" ] && ln -sf "$p" "$T/nocosign/$t"; done
-H=$(mktemp -d -p "$T"); set +e; OUT=$(env HOME="$H" PATH="$T/nocosign" "$T/nocosign/sh" "$INSTALL" --version "$V" 2>&1); rc=$?; set -e
+H=$(mktemp -d -p "$T"); set +e; OUT=$(env -u XDG_CONFIG_HOME HOME="$H" PATH="$T/nocosign" "$T/nocosign/sh" "$INSTALL" --version "$V" 2>&1); rc=$?; set -e
 [ "$rc" -eq 1 ] && echo "$OUT" | grep -q "cosign is required" && ok "missing cosign is refused" || { bad "missing cosign: rc=$rc"; echo "$OUT" | sed 's/^/     /'; }
 H=$(mktemp -d -p "$T"); set +e; OUT=$(env HOME="$H" PATH="$T/nocosign" "$T/nocosign/sh" "$INSTALL" --version "$V" --skip-signature 2>&1); rc=$?; set -e
 [ "$rc" -eq 0 ] && echo "$OUT" | grep -q "WARNING: skipping the signature check" && echo "$OUT" | grep -q "signature NOT checked" && ! echo "$OUT" | grep -q "and signature verified" && [ -x "$H/.local/bin/repo-keeper" ] && ok "--skip-signature warns loudly and proceeds" || { bad "--skip-signature: rc=$rc"; echo "$OUT" | sed 's/^/     /'; }
