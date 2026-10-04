@@ -88,9 +88,11 @@ type uiBackend struct{ d *Daemon }
 
 func (b uiBackend) Info() ui.Info {
 	addr, _ := b.d.uiAddr.Load().(string)
+	uv, uu, ur := b.d.updateNotice()
 	return ui.Info{
 		Version: b.d.version(), GitVersion: b.d.gitVersion, GoVersion: runtime.Version(),
 		ConfigPath: b.d.ConfigPath, StateDir: b.d.StateDir, UIAddr: addr, Started: b.d.started,
+		UpdateVersion: uv, UpdateURL: uu, UpdateUrgent: ur,
 	}
 }
 

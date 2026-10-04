@@ -21,6 +21,7 @@ import (
 	"github.com/basmulder03/repo-keeper/internal/paths"
 	"github.com/basmulder03/repo-keeper/internal/secrets"
 	"github.com/basmulder03/repo-keeper/internal/store"
+	"github.com/basmulder03/repo-keeper/internal/update"
 )
 
 type commonFlags struct {
@@ -214,7 +215,23 @@ func (a *app) cmdStatus(ctx context.Context, args []string) int {
 		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", r.Path, r.DefaultBranch, st, ago(r.LastSync), until(r.NextSync))
 	}
 	_ = tw.Flush()
+	if n := updateNotice(update.ReadState(c.stateDir), version); n != "" {
+		a.printf("\n%s\n", n)
+	}
 	return 0
+}
+
+// updateNotice is the one-line "a newer release exists" message of status and doctor, or "" when there is nothing
+// to say. It only informs: installing is the explicit `repo-keeper update --apply` (ADR-0021).
+func updateNotice(st update.State, current string) string {
+	if !st.Available(current) {
+		return ""
+	}
+	n := fmt.Sprintf("update available: %s (you run %s)", st.Latest, current)
+	if st.Urgent {
+		n += ", it contains a SECURITY FIX"
+	}
+	return n + ". Review it with: repo-keeper update"
 }
 
 func ago(t time.Time) string {
