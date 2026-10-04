@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -150,8 +151,12 @@ func TestDetect_FollowsSymlinksIntoTheNixStore(t *testing.T) {
 	if err := os.Symlink(target, link); err != nil {
 		t.Skip("symlinks unavailable")
 	}
-	if c := Detect(link, Probe{Exists: func(string) bool { return false }}); c.Exe != target || c.Kind != Tarball {
-		t.Fatalf("%+v", c)
+	want, err := filepath.EvalSymlinks(target) // the temp dir itself may sit behind a symlink (macOS: /var -> /private/var)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := Detect(link, Probe{Exists: func(string) bool { return false }}); c.Exe != want || c.Kind != Tarball {
+		t.Fatalf("%+v want exe %s", c, want)
 	}
 }
 
@@ -164,7 +169,7 @@ func TestState_RoundTrip_PrivateFile_AvailableOnlyWhenNewer(t *testing.T) {
 	if err := WriteState(dir, in); err != nil {
 		t.Fatal(err)
 	}
-	if fi, err := os.Stat(filepath.Join(dir, StateFile)); err != nil || fi.Mode().Perm() != 0o600 {
+	if fi, err := os.Stat(filepath.Join(dir, StateFile)); err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) { // no POSIX mode bits on Windows
 		t.Fatalf("state file mode: %v %v", fi, err)
 	}
 	out := ReadState(dir)

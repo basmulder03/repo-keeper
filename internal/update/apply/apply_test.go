@@ -83,7 +83,7 @@ func TestInstall_ReplacesKeepsPreviousAndNeverTouchesOtherNames(t *testing.T) {
 	if read("repo-keeper") != elf+"new" || read("repo-keeper-tray") != elf+"tray-new" || read("repo-keeper.previous") != elf+"old" || read("repo-keeper-tray.previous") != elf+"tray-old" || read("unrelated") != "keep me" {
 		t.Fatalf("files: %v", dirNames(t, dir))
 	}
-	if fi, _ := os.Stat(target); fi.Mode().Perm() != 0o755 {
+	if fi, _ := os.Stat(target); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o755 { // no POSIX mode bits on Windows
 		t.Fatalf("mode %v", fi.Mode())
 	}
 	for _, n := range dirNames(t, dir) {
