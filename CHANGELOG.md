@@ -2,6 +2,11 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
+## Unreleased
+
+### Added
+- **Generic git accounts** (`provider = "git"`): keep any list of https/ssh clone URLs in sync, with no platform API. Optional credential (SSH keys or public repositories need none), never offered to more than one https host, no passwords inside URLs. Also in the web form and `accounts add --provider git --urls ... --no-credential`. Cleanup uses only what git can prove, since there is no pull-request data.
+
 ## 0.1.0-beta.4
 
 ### Fixed

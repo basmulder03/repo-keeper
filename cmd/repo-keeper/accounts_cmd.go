@@ -34,12 +34,12 @@ func (a *app) newProvider(acct config.Account, tok secrets.Token) (provider.Prov
 	if err != nil {
 		return nil, nil, err
 	}
-	p, err := provider.New(provider.Kind(acct.Provider), provider.Config{BaseURL: acct.BaseURL, Token: tok, HTTP: hc})
+	p, err := provider.New(provider.Kind(acct.Provider), provider.Config{BaseURL: acct.BaseURL, Token: tok, HTTP: hc, Remotes: acct.URLs})
 	return p, lim, err
 }
 
 func (a *app) credSource(acct config.Account) secrets.Source {
-	return secrets.Source{Env: acct.TokenEnv, File: acct.TokenFile, Key: "account/" + acct.Name}
+	return secrets.Source{Env: acct.TokenEnv, File: acct.TokenFile, Key: "account/" + acct.Name, Optional: acct.Provider == "git"}
 }
 
 func (a *app) loadConfig(path string) (config.Config, string, error) {
@@ -108,7 +108,7 @@ func quoteList(l []string) string {
 func (a *app) accountsAdd(ctx context.Context, args []string) int {
 	fs := a.newFlagSet("accounts add")
 	cfgPath := fs.String("config", "", "config file")
-	prov := fs.String("provider", "github", "platform: github | gitlab | gitea | forgejo | bitbucket | azuredevops")
+	prov := fs.String("provider", "github", "platform: github | gitlab | gitea | forgejo | bitbucket | azuredevops | git")
 	base := fs.String("base-url", "", "API base URL (GitHub Enterprise: https://host/api/v3, self-managed GitLab: https://host)")
 	stdin := fs.Bool("token-stdin", false, "read the token from the first line of stdin")
 	device := fs.Bool("device", false, "log in with the OAuth device flow")
@@ -117,6 +117,8 @@ func (a *app) accountsAdd(ctx context.Context, args []string) int {
 	webURL := fs.String("web-url", "", "web base URL for --device (GitHub Enterprise: https://host)")
 	tokEnv := fs.String("token-env", "", "read the token from this environment variable instead of the keychain")
 	tokFile := fs.String("token-file", "", "read the token from this file (mode 600) instead of the keychain")
+	urls := fs.String("urls", "", "comma-separated clone URLs (generic git: https or ssh, no password inside)")
+	noCred := fs.Bool("no-credential", false, "generic git only: use SSH keys or public repositories, no token")
 	include := fs.String("include", "", "comma-separated include globs, e.g. me/*,my-org/*")
 	exclude := fs.String("exclude", "", "comma-separated exclude globs")
 	name, rest := "", args
@@ -130,7 +132,7 @@ func (a *app) accountsAdd(ctx context.Context, args []string) int {
 		_, _ = fmt.Fprintln(a.err, "usage: repo-keeper accounts add <name> [flags]")
 		return 2
 	}
-	acct := config.Account{Name: name, Provider: *prov, BaseURL: *base, TokenEnv: *tokEnv, TokenFile: *tokFile, Include: csv(*include), Exclude: csv(*exclude)}
+	acct := config.Account{Name: name, Provider: *prov, BaseURL: *base, TokenEnv: *tokEnv, TokenFile: *tokFile, URLs: csv(*urls), Include: csv(*include), Exclude: csv(*exclude)}
 	cfg, path, err := a.loadConfig(*cfgPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(a.err, "%v\n(run `repo-keeper init` first)\n", err)
@@ -145,6 +147,14 @@ func (a *app) accountsAdd(ctx context.Context, args []string) int {
 	external := *tokEnv != "" || *tokFile != ""
 	var tok secrets.Token
 	switch {
+	case *noCred && acct.Provider != "git":
+		_, _ = fmt.Fprintln(a.err, "--no-credential is only for generic git accounts")
+		return 2
+	case *noCred && (external || *stdin || *device):
+		_, _ = fmt.Fprintln(a.err, "--no-credential cannot be combined with a credential source")
+		return 2
+	case *noCred:
+		// nothing to resolve
 	case external:
 		if tok, err = a.credSource(acct).Resolve(store); err != nil {
 			_, _ = fmt.Fprintln(a.err, err)
@@ -181,7 +191,7 @@ func (a *app) accountsAdd(ctx context.Context, args []string) int {
 		return 1
 	}
 	a.printAuth(auth)
-	if !external {
+	if !external && !*noCred {
 		if err := store.Set("account/"+name, tok); err != nil {
 			_, _ = fmt.Fprintln(a.err, err, "\nHint: no keychain? use --token-file or --token-env instead.")
 			return 1
@@ -219,6 +229,9 @@ func stanzaFor(ac config.Account) string {
 	if ac.TokenFile != "" {
 		fmt.Fprintf(&b, "token_file = %q\n", ac.TokenFile)
 	}
+	if len(ac.URLs) > 0 {
+		fmt.Fprintf(&b, "urls = %s\n", quoteList(ac.URLs))
+	}
 	if len(ac.Include) > 0 {
 		fmt.Fprintf(&b, "include = %s\n", quoteList(ac.Include))
 	}
@@ -247,6 +260,10 @@ func (a *app) deviceLogin(ctx context.Context, clientID, scope, webURL string) (
 }
 
 func (a *app) printAuth(au provider.Auth) {
+	if au.Login == "" {
+		a.printf("no login to check (a plain list of repositories)\n")
+		return
+	}
 	a.printf("authenticated as %s", au.Login)
 	if len(au.Scopes) > 0 {
 		a.printf(" (scopes: %s)", strings.Join(au.Scopes, ", "))
@@ -282,8 +299,10 @@ func (a *app) accountsList(_ context.Context, args []string) int {
 		case ac.TokenFile != "":
 			src = "file:" + ac.TokenFile
 		}
-		if _, err := a.credSource(ac).Resolve(store); err != nil {
+		if tok, err := a.credSource(ac).Resolve(store); err != nil {
 			avail = "no (" + shortErr(err) + ")"
+		} else if tok.IsZero() {
+			src = "none (SSH keys or public)"
 		}
 		base := ac.BaseURL
 		if base == "" {

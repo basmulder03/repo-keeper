@@ -262,7 +262,7 @@ func (b uiBackend) AccountForm(_ context.Context, name string) (ui.AccountForm, 
 		}
 		f := ui.AccountForm{
 			Name: a.Name, Provider: a.Provider, BaseURL: a.BaseURL, Auth: "keep", TokenFile: a.TokenFile, TokenEnv: a.TokenEnv,
-			ClientID: a.OAuthClientID, WebURL: a.OAuthWebURL, Include: strings.Join(a.Include, "\n"), Exclude: strings.Join(a.Exclude, "\n"),
+			ClientID: a.OAuthClientID, WebURL: a.OAuthWebURL, URLs: strings.Join(a.URLs, "\n"), Include: strings.Join(a.Include, "\n"), Exclude: strings.Join(a.Exclude, "\n"),
 			CAFile: a.CAFile, CloneProtocol: a.CloneProtocol, SkipArchived: a.SkipArchived == nil || *a.SkipArchived,
 			SkipForks: a.SkipForks, PartialClone: a.PartialClone, CleanupMode: a.CleanupMode, Root: cfg.General.Root,
 		}
@@ -282,7 +282,7 @@ func buildAccount(f ui.AccountForm, existing *config.Account) (config.Account, [
 	var problems []string
 	a := config.Account{
 		Name: strings.TrimSpace(f.Name), Provider: f.Provider, BaseURL: strings.TrimSpace(f.BaseURL),
-		Include: lines(f.Include), Exclude: lines(f.Exclude), CAFile: strings.TrimSpace(f.CAFile),
+		URLs: lines(f.URLs), Include: lines(f.Include), Exclude: lines(f.Exclude), CAFile: strings.TrimSpace(f.CAFile),
 		CloneProtocol: f.CloneProtocol, SkipForks: f.SkipForks, PartialClone: f.PartialClone, CleanupMode: f.CleanupMode,
 		OAuthClientID: strings.TrimSpace(f.ClientID), OAuthWebURL: strings.TrimSpace(f.WebURL),
 	}
@@ -315,6 +315,10 @@ func buildAccount(f ui.AccountForm, existing *config.Account) (config.Account, [
 				a.OAuthClientID, a.OAuthWebURL = existing.OAuthClientID, existing.OAuthWebURL
 			}
 		}
+	case "none":
+		if f.Provider != "git" {
+			problems = append(problems, "Only generic git accounts can work without a credential.")
+		}
 	case "token", "device":
 		// the secret goes to the secret store; the config names no credential source
 	default:
@@ -328,7 +332,7 @@ func (d *Daemon) providerFor(a config.Account, tok secrets.Token) (provider.Prov
 	if err != nil {
 		return nil, err
 	}
-	return provider.New(provider.Kind(a.Provider), provider.Config{BaseURL: a.BaseURL, Token: tok, HTTP: hc})
+	return provider.New(provider.Kind(a.Provider), provider.Config{BaseURL: a.BaseURL, Token: tok, HTTP: hc, Remotes: a.URLs})
 }
 
 // verify proves the credential works before anything is saved, so a typo never becomes a broken account.
@@ -422,6 +426,8 @@ func (b uiBackend) SaveAccount(ctx context.Context, f ui.AccountForm) error {
 	}
 	if !tok.IsZero() {
 		d.Redactor.Add(tok.Reveal())
+	}
+	if !tok.IsZero() || f.Auth == "none" { // "none" still builds the provider, which validates the URL list
 		if _, err := d.verify(ctx, acct, tok); err != nil {
 			return err
 		}

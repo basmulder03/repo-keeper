@@ -41,7 +41,7 @@ type accountRT struct {
 }
 
 func (a *accountRT) source() secrets.Source {
-	return secrets.Source{Env: a.set.TokenEnv, File: a.set.TokenFile, Key: "account/" + a.set.Name}
+	return secrets.Source{Env: a.set.TokenEnv, File: a.set.TokenFile, Key: "account/" + a.set.Name, Optional: a.set.Provider == "git"}
 }
 
 // get returns a provider with a fresh-enough token.
@@ -63,7 +63,7 @@ func (a *accountRT) get() (provider.Provider, secrets.Token, error) {
 		if err != nil {
 			return nil, secrets.Token{}, err
 		}
-		p, err := provider.New(provider.Kind(a.set.Provider), provider.Config{BaseURL: a.set.BaseURL, Token: tok, HTTP: hc})
+		p, err := provider.New(provider.Kind(a.set.Provider), provider.Config{BaseURL: a.set.BaseURL, Token: tok, HTTP: hc, Remotes: a.set.URLs})
 		if err != nil {
 			return nil, secrets.Token{}, err
 		}

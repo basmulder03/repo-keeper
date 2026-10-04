@@ -78,7 +78,25 @@
 - **Namespaces:** always `owner/name` (organisations are owners); the merged-PR lookup refuses anything else rather than guessing.
 - **Last verified:** 2026-10-03 against the API shape in fixtures only. **Not yet exercised against a live Gitea/Forgejo/Codeberg server and ToS pages not re-read for this change**; do both before promoting out of beta (tracked in OPEN-QUESTIONS).
 ## Generic git
-- User supplies URLs; no discovery, no PR data. Auth via SSH agent or credential helper-equivalent from our keychain.
+
+**Implemented (M6, `git` kind).** For any server that speaks plain git: you list the clone URLs, repo-keeper clones and keeps them in sync. There is no platform API, so no discovery, no login check and no pull-request data; cleanup therefore only trusts what git can prove (merged into the default branch, or patch-equivalent once the remote branch is gone). No outbound HTTP at all: only git, through `gitx`.
+
+```toml
+[[account]]
+name = "internal"
+provider = "git"
+urls = [
+  "git@git.example.com:team/app.git",          # ssh, scp-like
+  "ssh://git@git.example.com:2222/team/x.git", # ssh url
+  "https://git.example.com/team/tools.git",    # https (optional token, see below)
+]
+```
+or `repo-keeper accounts add internal --provider git --urls 'git@git.example.com:team/app.git,...' --no-credential`.
+- **Layout:** `<root>/git/<host>/<path...>`, so repositories from different servers never collide. `include`/`exclude` globs match `host/path`. The port is not part of the name.
+- **Credentials:** none by default (SSH keys through your agent, or public repositories). For https you may give a token (`token_file`, `token_env` or the keychain); it is used as the password with user `git`. **A token is only ever offered to a single https host**: if the https URLs span several hosts the account is refused ("use one account per host"), so a token for one server can never reach another. SSH URLs are exempt because they never carry the token.
+- **Refused up front:** URLs with a password inside (credentials never belong in a URL or the config; a user name on an https URL is dropped), cleartext `http://`, `file:`, `ext::` helpers, local paths, option look-alikes, duplicates, and anything that cannot be mapped to a safe local path (for example `~user/` paths or `..`). Error messages never echo URL passwords.
+- **Limits:** Git itself is the only network traffic; the scheduler's per-host pacing, backoff and circuit breaker apply as for every other account.
+- **Not verified:** nothing platform-specific to verify. Tested with fixtures only; the first real run against a self-hosted server (SSH and https) is part of the beta checklist.
 
 ## Credential handling per provider
 - Stored in OS keychain keyed by `repo-keeper/<account-id>`.

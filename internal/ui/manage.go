@@ -38,6 +38,7 @@ type AccountForm struct {
 	WebURL    string // device flow, GitHub Enterprise Server web root
 	Scope     string // device flow, OAuth Apps only (empty for GitHub Apps)
 
+	URLs              string // generic git only: one clone URL per line
 	Include, Exclude  string // one pattern per line (commas also accepted)
 	CAFile            string
 	CloneProtocol     string // "", https, ssh

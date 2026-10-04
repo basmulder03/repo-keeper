@@ -169,7 +169,7 @@ func accountFormFrom(r *http.Request) AccountForm {
 		Name: strings.TrimSpace(v("name")), Provider: v("provider"), BaseURL: v("base_url"), Auth: v("auth"),
 		Token: secrets.New(strings.TrimSpace(v("token"))), TokenFile: v("token_file"), TokenEnv: v("token_env"),
 		ClientID: v("client_id"), WebURL: v("web_url"), Scope: v("scope"),
-		Include: v("include"), Exclude: v("exclude"), CAFile: v("ca_file"), CloneProtocol: v("clone_protocol"),
+		URLs: v("urls"), Include: v("include"), Exclude: v("exclude"), CAFile: v("ca_file"), CloneProtocol: v("clone_protocol"),
 		SkipArchived: on("skip_archived"), SkipForks: on("skip_forks"), PartialClone: on("partial_clone"),
 		DiscoveryInterval: v("discovery_interval"), Interval: v("interval"), CleanupMode: v("cleanup_mode"), Root: v("root"),
 	}

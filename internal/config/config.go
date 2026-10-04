@@ -21,6 +21,8 @@ import (
 	"github.com/basmulder03/repo-keeper/internal/cleanup"
 	"github.com/basmulder03/repo-keeper/internal/provider"
 	_ "github.com/basmulder03/repo-keeper/internal/provider/all" // registers every platform for validation
+	"github.com/basmulder03/repo-keeper/internal/provider/generic"
+	"github.com/basmulder03/repo-keeper/internal/secrets"
 )
 
 // MinInterval is the hard floor so config can never make repo-keeper abusive (FR-R4).
@@ -94,10 +96,11 @@ type UI struct {
 
 // Account is a platform login whose repositories are discovered and cloned automatically.
 type Account struct {
-	Name     string `toml:"name,omitempty"`
-	Provider string `toml:"provider,omitempty"` // github | gitlab | gitea | forgejo | bitbucket | azuredevops
-	BaseURL  string `toml:"base_url,omitempty"` // API base: GHES https://ghe.example.com/api/v3, GitLab https://gitlab.example.com, Gitea/Forgejo https://git.example.com (required); default is the public cloud
-	CAFile   string `toml:"ca_file,omitempty"`  // PEM bundle with the private CA of a self-hosted instance (absolute path)
+	Name     string   `toml:"name,omitempty"`
+	Provider string   `toml:"provider,omitempty"` // github | gitlab | gitea | forgejo | bitbucket | azuredevops | git
+	BaseURL  string   `toml:"base_url,omitempty"` // API base: GHES https://ghe.example.com/api/v3, GitLab https://gitlab.example.com, Gitea/Forgejo https://git.example.com (required); default is the public cloud
+	URLs     []string `toml:"urls,omitempty"`     // generic git only: the clone URLs (https or ssh), no credentials inside
+	CAFile   string   `toml:"ca_file,omitempty"`  // PEM bundle with the private CA of a self-hosted instance (absolute path)
 	// Credential source; with neither set the OS keychain entry "account/<name>" is used.
 	TokenEnv          string   `toml:"token_env,omitempty"`
 	TokenFile         string   `toml:"token_file,omitempty"`
@@ -222,6 +225,17 @@ func (c Config) Validate() error {
 		}
 		if (a.Provider == "gitea" || a.Provider == "forgejo" || a.Provider == "azuredevops") && a.BaseURL == "" {
 			bad("account[%d].base_url is required for %s (Gitea/Forgejo: your server, e.g. https://codeberg.org; Azure DevOps: your organization, e.g. https://dev.azure.com/acme)", i, a.Provider)
+		}
+		if a.Provider == "git" {
+			var tok secrets.Token
+			if a.TokenEnv != "" || a.TokenFile != "" {
+				tok = secrets.New("x") // only whether a credential exists matters for the single-host rule
+			}
+			if _, err := generic.New(provider.Config{BaseURL: a.BaseURL, Token: tok, Remotes: a.URLs}); err != nil {
+				bad("account[%d]: %v", i, err)
+			}
+		} else if len(a.URLs) > 0 {
+			bad("account[%d].urls only applies to provider \"git\"", i)
 		}
 		if a.TokenEnv != "" && a.TokenFile != "" {
 			bad("account[%d]: set only one of token_env and token_file", i)

@@ -37,6 +37,8 @@ const (
 	Bitbucket Kind = "bitbucket"
 	// AzureDevOps is Azure DevOps Services and Server.
 	AzureDevOps Kind = "azuredevops"
+	// Git is a plain git remote listed by URL (no platform API).
+	Git Kind = "git"
 )
 
 // ErrAuth means the credential is missing, revoked or expired; retrying will not help until it is replaced.
@@ -85,6 +87,8 @@ type Config struct {
 	BaseURL string
 	Token   secrets.Token
 	HTTP    *httpx.Client
+	// Remotes is the static repository list for platforms without discovery (generic git).
+	Remotes []string
 }
 
 // Factory creates a Provider from Config.

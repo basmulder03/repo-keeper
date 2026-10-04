@@ -97,6 +97,8 @@ type Source struct {
 	Env  string // environment variable name
 	File string // path to a file holding only the token (agenix/sops/systemd credentials)
 	Key  string // name in the Store
+	// Optional makes a missing Store entry a valid "no credential" (zero token) instead of an error.
+	Optional bool
 }
 
 const maxTokenFile = 4096
@@ -113,7 +115,11 @@ func (s Source) Resolve(store Store) (Token, error) {
 	case s.File != "":
 		return readTokenFile(s.File)
 	default:
-		return store.Get(s.Key)
+		t, err := store.Get(s.Key)
+		if s.Optional && errors.Is(err, ErrNotFound) {
+			return Token{}, nil // no credential is a valid setup here (SSH keys, public repositories)
+		}
+		return t, err
 	}
 }
 
