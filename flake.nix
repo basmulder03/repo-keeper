@@ -12,6 +12,7 @@
 
   outputs = { self, nixpkgs, home-manager }:
     let
+      version = nixpkgs.lib.removeSuffix "\n" (builtins.readFile ./VERSION); # the one tracked copy; scripts/check-version.sh enforces it
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAll = f: nixpkgs.lib.genAttrs systems (s: f nixpkgs.legacyPackages.${s});
     in
@@ -19,12 +20,12 @@
       packages = forAll (pkgs: {
         default = pkgs.buildGoModule {
           pname = "repo-keeper";
-          version = "0.1.0-beta.5";
+          inherit version;
           src = ./.;
           vendorHash = "sha256-RYbPB9cNhC836bnmoTWCgQfpWrRoaz0V/wqKq4hmS18=";
           env.CGO_ENABLED = 0;
           subPackages = [ "cmd/repo-keeper" "cmd/repo-keeper-tray" ];
-          ldflags = [ "-s" "-w" "-X main.version=0.1.0-beta.5" "-X main.commit=${self.shortRev or self.dirtyShortRev or "dev"}" ];
+          ldflags = [ "-s" "-w" "-X main.version=${version}" "-X main.commit=${self.shortRev or self.dirtyShortRev or "dev"}" ];
           nativeCheckInputs = [ pkgs.git ];
           meta = {
             description = "Keeps local clones of your remote repositories in sync";

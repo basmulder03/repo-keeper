@@ -34,7 +34,7 @@ A lightweight, local-first background agent that keeps every repository you can 
 | [Roadmap](docs/ROADMAP.md) | Milestones |
 | [Security review](docs/SECURITY-REVIEW.md) · [Performance](docs/PERFORMANCE.md) | Self-audit findings, measured budgets |
 | [Decisions (ADRs)](docs/adr/) | Why we chose what we chose |
-| [Beta guide](docs/BETA.md) · [Changelog](CHANGELOG.md) | How to test 0.1.0-beta.1 safely, what changed |
+| [Beta guide](docs/BETA.md) · [Changelog](CHANGELOG.md) | How to test the beta safely, what changed |
 | [Decisions & open items](docs/OPEN-QUESTIONS.md) | Resolved choices, what remains |
 | [AGENTS.md](AGENTS.md) | Rules for AI coding agents |
 

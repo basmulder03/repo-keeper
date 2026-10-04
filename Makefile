@@ -5,7 +5,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-.PHONY: build test lint security fmt tidy gen check snapshot repro coverage fuzz perf
+.PHONY: build test lint security fmt tidy gen check snapshot repro coverage fuzz perf version release-prep
 .DEFAULT_GOAL := build
 
 build: ## static binary in ./bin
@@ -46,3 +46,10 @@ repro: ## prove the release artifacts are byte-reproducible
 	./scripts/check-reproducible.sh
 
 check: coverage lint security ## what CI and every PR must pass
+
+version: ## check that VERSION, the changelog and the flake agree
+	./scripts/check-version.sh
+
+release-prep: ## bump VERSION and the changelog heading: make release-prep NEW=0.1.0-beta.6
+	@test -n "$(NEW)" || { echo "usage: make release-prep NEW=<version>"; exit 2; }
+	./scripts/release-prep.sh $(NEW)
