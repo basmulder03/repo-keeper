@@ -2,6 +2,7 @@ name: ci
 on:
   push: { branches: [main] }
   pull_request:
+  workflow_dispatch: # prepare-release.yml runs the required checks on its release branch
 permissions:
   contents: read
 concurrency:

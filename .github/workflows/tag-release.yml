@@ -1,0 +1,25 @@
+name: tag-release
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+permissions:
+  contents: read
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # push the tag
+      actions: write   # tags pushed with GITHUB_TOKEN start no workflows, so dispatch release by hand
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }
+      - name: Tag VERSION and start the release
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          tag="v$(<VERSION)"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then echo "$tag already exists"; exit 0; fi
+          scripts/check-version.sh "$tag"
+          git tag -a "$tag" -m "${tag#v}"
+          git push origin "$tag"
+          gh workflow run release.yml --ref "$tag"

@@ -1,0 +1,36 @@
+name: prepare-release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "New version without the v, e.g. 0.1.0-beta.6"
+        required: true
+permissions:
+  contents: read
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # push the release branch
+      pull-requests: write  # open the release PR
+      actions: write        # PRs opened with GITHUB_TOKEN start no checks, so dispatch ci by hand
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Bump VERSION and the changelog
+        env: { VERSION: "${{ inputs.version }}" } # release-prep.sh validates it as a semver
+        run: scripts/release-prep.sh "$VERSION"
+      - name: Open the release PR and run its checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          branch="chore/release-$VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -am "chore: release $VERSION"
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" --title "chore: release $VERSION" \
+            --body "Prepared by the prepare-release workflow. Merging this tags v$VERSION and starts the draft release (docs/RELEASING.md)."
+          gh workflow run ci.yml --ref "$branch"
