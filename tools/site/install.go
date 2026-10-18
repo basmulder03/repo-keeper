@@ -25,7 +25,7 @@ func (b *build) installVersion() (version string, published bool, err error) {
 	return b.Version, false, nil
 }
 
-// genInstall publishes scripts/install.sh with the pinned version filled in, and appends ready-to-paste commands.
+// genInstall publishes scripts/install.sh and install.ps1 as they are (both resolve the latest release), and appends ready-to-paste commands.
 func genInstall(b *build) (string, error) {
 	v, published, err := b.installVersion()
 	if err != nil {
@@ -35,17 +35,23 @@ func genInstall(b *build) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// only the default in the assignment is pinned; the "unpinned copy" guard further down must keep its placeholder
-	const assign = `VERSION="${REPO_KEEPER_VERSION:-@VERSION@}"`
-	if strings.Count(string(src), assign) != 1 {
-		return "", fmt.Errorf("install.sh no longer contains the expected version assignment %s", assign)
-	}
-	script := strings.Replace(string(src), assign, `VERSION="${REPO_KEEPER_VERSION:-`+v+`}"`, 1)
+	script := string(src) // not pinned: it resolves the latest release itself
 	if err := os.WriteFile(filepath.Join(b.Out, "install.sh"), []byte(script), 0o600); err != nil { //nolint:gosec // served as a static file
 		return "", err
 	}
 	sum := sha256.Sum256([]byte(script))
 	sha := hex.EncodeToString(sum[:])
+
+	ps, err := b.read("scripts/install.ps1")
+	if err != nil {
+		return "", err
+	}
+	psScript := string(ps) // not pinned: it resolves the latest release itself
+	if err := os.WriteFile(filepath.Join(b.Out, "install.ps1"), []byte(psScript), 0o600); err != nil { //nolint:gosec // served as a static file
+		return "", err
+	}
+	psSum := sha256.Sum256([]byte(psScript))
+	psSha := hex.EncodeToString(psSum[:])
 	tag, base := "v"+v, b.RepoURL+"/releases/download/v"+v
 	esc := html.EscapeString
 
@@ -57,8 +63,10 @@ func genInstall(b *build) (string, error) {
 		h.WriteString("<p class=\"muted\"><strong>No release is published yet.</strong> The commands below pin <code>" + esc(tag) + "</code> (the current <code>VERSION</code>) and start working as soon as that release is published; the Nix commands work from source already.</p>\n")
 	}
 	h.WriteString("<h3 id=\"pinned-nix\">Nix</h3>\n<pre><code>nix run " + esc("github:basmulder03/repo-keeper/"+tag) + " -- version\nnix profile add " + esc("github:basmulder03/repo-keeper/"+tag) + "</code></pre>\n")
-	h.WriteString("<h3 id=\"pinned-script\">Any Linux (amd64, arm64)</h3>\n<pre><code>curl -fsSLo install.sh https://basmulder03.github.io/repo-keeper/install.sh\necho '" + sha + "  install.sh' | sha256sum --check\nsh install.sh</code></pre>\n")
-	h.WriteString("<p>SHA-256 of the script published here: <code>" + sha + "</code>. It pins <code>" + esc(tag) + "</code>, verifies the signature and the archive checksum before installing, and refuses on any mismatch. <a href=\"install.sh\">Read it first</a>.</p>\n")
+	h.WriteString("<h3 id=\"pinned-script\">Any Linux (amd64, arm64; installs the latest release, or add <code>--version X.Y.Z</code>)</h3>\n<pre><code>curl -fsSLo install.sh https://basmulder03.github.io/repo-keeper/install.sh\necho '" + sha + "  install.sh' | sha256sum --check\nsh install.sh</code></pre>\n")
+	h.WriteString("<p>SHA-256 of the script published here: <code>" + sha + "</code>. It installs the latest stable release, verifies the signature and the archive checksum before installing, and refuses on any mismatch. <a href=\"install.sh\">Read it first</a>.</p>\n")
+	h.WriteString("<h3 id=\"pinned-windows\">Windows (amd64, arm64; installs the latest release, or add <code>-Version X.Y.Z</code>)</h3>\n<pre><code>Invoke-WebRequest https://basmulder03.github.io/repo-keeper/install.ps1 -OutFile install.ps1\nif ((Get-FileHash install.ps1).Hash -ne '" + psSha + "') { throw 'install.ps1 does not match the published checksum' }\npowershell -ExecutionPolicy Bypass -File .\\install.ps1</code></pre>\n")
+	h.WriteString("<p>SHA-256 of the script published here: <code>" + psSha + "</code>. Same checks as the Linux script (cosign signature, then archive SHA-256, nothing installed on a mismatch); it needs <code>cosign.exe</code> or <code>-SkipSignature</code>. <a href=\"install.ps1\">Read it first</a>.</p>\n")
 	h.WriteString("<h3 id=\"pinned-deb\">Debian and Ubuntu</h3>\n<pre><code>" + esc(fmt.Sprintf(`a=$(dpkg --print-architecture)   # amd64 or arm64
 for f in repo-keeper_%[1]s_linux_${a}.deb checksums.txt checksums.txt.sig checksums.txt.pem; do curl -fsSLO %[2]s/$f; done
 cosign verify-blob checksums.txt --certificate checksums.txt.pem --signature checksums.txt.sig \
