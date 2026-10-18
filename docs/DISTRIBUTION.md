@@ -42,7 +42,7 @@ SBOM (SPDX/CycloneDX via syft), SLSA provenance (`slsa-github-generator`), cosig
 
 ## Publishing the winget and Scoop manifests
 After a release is published (not while it is a draft: the manifests point at the public download URLs and carry the archive hashes):
-1. Scoop: download the `package-manifests` artifact of the release workflow run, then copy `repo-keeper.json` into the `basmulder03/scoop-bucket` repository (`bucket/repo-keeper.json`) and push. Users run `scoop bucket add repo-keeper https://github.com/basmulder03/scoop-bucket` then `scoop install repo-keeper`.
+1. Scoop: download the `package-manifests` artifact of the release workflow run, then copy `scoop/repo-keeper.json` into the `basmulder03/scoop-bucket` repository (`bucket/repo-keeper.json`) and push. Users run `scoop bucket add repo-keeper https://github.com/basmulder03/scoop-bucket` then `scoop install repo-keeper`.
 2. winget: copy `winget/manifests/...` from the same artifact into a fork of `microsoft/winget-pkgs` under the same relative path and open a pull request; its validation bot checks the hashes and scans the installer. After it merges, `winget install basmulder03.repo-keeper` works.
 Check both with a throwaway user before announcing.
 
