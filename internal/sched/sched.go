@@ -48,6 +48,7 @@ type Scheduler struct {
 	// Quiet reports whether scheduled (not manual) syncs are paused at t.
 	Quiet func(t time.Time) bool
 
+	once     sync.Once
 	mu       sync.Mutex
 	inflight map[int64]bool
 	paused   atomic.Bool
@@ -56,26 +57,28 @@ type Scheduler struct {
 }
 
 func (s *Scheduler) init() {
-	if s.Tick <= 0 {
-		s.Tick = 30 * time.Second
-	}
-	if s.Workers <= 0 {
-		s.Workers = 4
-	}
-	if s.JobTimeout <= 0 {
-		s.JobTimeout = 20 * time.Minute
-	}
-	if s.Jitter == nil {
-		s.Jitter = rand.Float64
-	}
-	if s.Log == nil {
-		s.Log = slog.Default()
-	}
-	s.mu.Lock()
-	if s.inflight == nil {
-		s.inflight, s.forced, s.wake = map[int64]bool{}, map[int64]bool{}, make(chan struct{}, 1)
-	}
-	s.mu.Unlock()
+	s.once.Do(func() { // Run, Wake and TriggerNow race to be first
+		if s.Tick <= 0 {
+			s.Tick = 30 * time.Second
+		}
+		if s.Workers <= 0 {
+			s.Workers = 4
+		}
+		if s.JobTimeout <= 0 {
+			s.JobTimeout = 20 * time.Minute
+		}
+		if s.Jitter == nil {
+			s.Jitter = rand.Float64
+		}
+		if s.Log == nil {
+			s.Log = slog.Default()
+		}
+		s.mu.Lock()
+		if s.inflight == nil {
+			s.inflight, s.forced, s.wake = map[int64]bool{}, map[int64]bool{}, make(chan struct{}, 1)
+		}
+		s.mu.Unlock()
+	})
 }
 
 // TriggerNow makes a repo due immediately and bypasses quiet hours (rate limits still apply).

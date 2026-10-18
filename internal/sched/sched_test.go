@@ -301,3 +301,13 @@ func (r *rig) settle(t *testing.T) {
 		time.Sleep(2 * time.Millisecond)
 	}
 }
+
+func TestScheduler_ConcurrentInit_NoRace(t *testing.T) {
+	s := &Scheduler{}
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() { defer wg.Done(); s.Wake() }()
+	}
+	wg.Wait()
+}
