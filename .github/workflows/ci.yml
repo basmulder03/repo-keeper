@@ -59,5 +59,11 @@ jobs:
         run: |
           shellcheck -S warning scripts/*.sh
           ./scripts/test-install.sh
+      - name: install.ps1 parses
+        shell: pwsh
+        run: |
+          $e = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile("$PWD/scripts/install.ps1", [ref]$null, [ref]$e)
+          if ($e) { $e; exit 1 }
       - name: Release artifacts are reproducible
         run: ./scripts/check-reproducible.sh
