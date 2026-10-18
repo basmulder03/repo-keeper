@@ -33,7 +33,7 @@ func (c CosignCLI) Available() bool {
 }
 
 // Verify implements Verifier.
-func (c CosignCLI) Verify(ctx context.Context, checksums, sig, cert []byte, identity, issuer string) error {
+func (c CosignCLI) Verify(ctx context.Context, checksums, bundle []byte, identity, issuer string) error {
 	bin, err := exec.LookPath(c.bin())
 	if err != nil {
 		return ErrNoCosign
@@ -43,7 +43,7 @@ func (c CosignCLI) Verify(ctx context.Context, checksums, sig, cert []byte, iden
 		return err
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
-	paths := map[string][]byte{"checksums.txt": checksums, "checksums.txt.sig": sig, "checksums.txt.pem": cert}
+	paths := map[string][]byte{"checksums.txt": checksums, "checksums.txt.sigstore.json": bundle}
 	for name, data := range paths {
 		if err := os.WriteFile(filepath.Join(dir, name), data, 0o600); err != nil {
 			return err
@@ -53,7 +53,7 @@ func (c CosignCLI) Verify(ctx context.Context, checksums, sig, cert []byte, iden
 	defer cancel()
 	// #nosec G204 -- the cosign program with fixed flags; identity and issuer are data, not shell
 	cmd := exec.CommandContext(ctx, bin, "verify-blob", filepath.Join(dir, "checksums.txt"), //nolint:gosec,forbidigo // sanctioned: signature verification is the one reason this package runs a program
-		"--certificate", filepath.Join(dir, "checksums.txt.pem"), "--signature", filepath.Join(dir, "checksums.txt.sig"),
+		"--bundle", filepath.Join(dir, "checksums.txt.sigstore.json"),
 		"--certificate-identity", identity, "--certificate-oidc-issuer", issuer)
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out

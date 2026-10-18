@@ -23,7 +23,7 @@ arch=amd64; [ "$(uname -m)" = aarch64 ] && arch=arm64
 ARCHIVE="repo-keeper_${V}_linux_${arch}.tar.gz"
 tar -czf "$T/srv/v$V/$ARCHIVE" -C "$T/pkg" repo-keeper repo-keeper-tray systemd
 ( cd "$T/srv/v$V" && sha256sum "$ARCHIVE" > checksums.txt )
-echo sig > "$T/srv/v$V/checksums.txt.sig"; echo pem > "$T/srv/v$V/checksums.txt.pem"
+echo bundle > "$T/srv/v$V/checksums.txt.sigstore.json"
 cp -r "$T/srv/v$V" "$T/good"   # pristine copy for resets
 
 # --- a stand-in cosign that records its arguments and obeys COSIGN_RC

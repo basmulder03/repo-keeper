@@ -90,11 +90,10 @@ fetch checksums.txt
 fetch "$ARCHIVE"
 
 if [ "$SKIP_SIG" -eq 0 ]; then
-  fetch checksums.txt.sig
-  fetch checksums.txt.pem
+  fetch checksums.txt.sigstore.json
   say "verifying the signature of checksums.txt"
   cosign verify-blob "$TMP/checksums.txt" \
-    --certificate "$TMP/checksums.txt.pem" --signature "$TMP/checksums.txt.sig" \
+    --bundle "$TMP/checksums.txt.sigstore.json" \
     --certificate-identity "https://github.com/basmulder03/repo-keeper/.github/workflows/release.yml@refs/tags/$TAG" \
     --certificate-oidc-issuer https://token.actions.githubusercontent.com >/dev/null 2>&1 \
     || die "signature verification FAILED: not installing"

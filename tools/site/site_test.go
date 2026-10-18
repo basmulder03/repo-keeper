@@ -248,7 +248,7 @@ func TestInstall_PinsNewestPublishedRelease_IgnoresDrafts(t *testing.T) {
 	rel := filepath.Join(t.TempDir(), "releases.json")
 	data := `[
 	 {"tag_name":"v2.0.0-beta.9","draft":true,"published_at":"2026-10-05T00:00:00Z","html_url":"https://x/9","assets":[]},
-	 {"tag_name":"v2.0.0-beta.2","draft":false,"prerelease":true,"published_at":"2026-10-02T00:00:00Z","html_url":"https://x/2","assets":[{"name":"repo-keeper_2.0.0-beta.2_linux_amd64.tar.gz","browser_download_url":"https://x/a.tgz","download_count":7},{"name":"checksums.txt.sig","browser_download_url":"https://x/s","download_count":1}]},
+	 {"tag_name":"v2.0.0-beta.2","draft":false,"prerelease":true,"published_at":"2026-10-02T00:00:00Z","html_url":"https://x/2","assets":[{"name":"repo-keeper_2.0.0-beta.2_linux_amd64.tar.gz","browser_download_url":"https://x/a.tgz","download_count":7},{"name":"checksums.txt.sigstore.json","browser_download_url":"https://x/s","download_count":1}]},
 	 {"tag_name":"v2.0.0-beta.1","draft":false,"published_at":"2026-10-01T00:00:00Z","html_url":"https://x/1","assets":[]}]`
 	if err := os.WriteFile(rel, []byte(data), 0o600); err != nil {
 		t.Fatal(err)

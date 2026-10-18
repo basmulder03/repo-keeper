@@ -25,7 +25,7 @@ const Issuer = "https://token.actions.githubusercontent.com"
 
 // Verifier checks the cosign signature of checksums.txt.
 type Verifier interface {
-	Verify(ctx context.Context, checksums, sig, cert []byte, identity, issuer string) error
+	Verify(ctx context.Context, checksums, bundle []byte, identity, issuer string) error
 }
 
 // Signature is the outcome of the signature check, kept so --check can show it without failing.
@@ -60,7 +60,7 @@ type Evidence struct {
 	Archive     update.Asset
 	ChecksumsAt string
 	Checksums   []byte
-	Sig, Cert   []byte
+	Bundle      []byte
 	ExpectedSHA string
 	Computed    string // set after the archive was downloaded
 	Identity    string
@@ -112,7 +112,7 @@ func (s Source) Gather(ctx context.Context, rel update.Release) (Evidence, error
 	if ev.Archive, err = pick(name); err != nil {
 		return ev, err
 	}
-	files := map[string]*[]byte{"checksums.txt": &ev.Checksums, "checksums.txt.sig": &ev.Sig, "checksums.txt.pem": &ev.Cert}
+	files := map[string]*[]byte{"checksums.txt": &ev.Checksums, "checksums.txt.sigstore.json": &ev.Bundle}
 	for file, dst := range files {
 		a, err := pick(file)
 		if err != nil {
@@ -130,7 +130,7 @@ func (s Source) Gather(ctx context.Context, rel update.Release) (Evidence, error
 	}
 	if s.Verifier == nil {
 		ev.Signature = Signature{Detail: "NOT verified: no verifier configured"}
-	} else if err := s.Verifier.Verify(ctx, ev.Checksums, ev.Sig, ev.Cert, ev.Identity, ev.Issuer); err != nil {
+	} else if err := s.Verifier.Verify(ctx, ev.Checksums, ev.Bundle, ev.Identity, ev.Issuer); err != nil {
 		ev.Signature = Signature{Detail: "NOT verified: " + err.Error()}
 	} else {
 		ev.Signature = Signature{Verified: true, Detail: "verified"}

@@ -22,7 +22,7 @@ Policy and past advisories: <https://github.com/basmulder03/repo-keeper/security
 See [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md).
 
 ## Verifying releases
-Each release ships `checksums.txt`, a cosign signature/certificate, an SBOM (SPDX) and SLSA provenance. Verify with `cosign verify-blob` (exact commands in release notes).
+Each release ships `checksums.txt`, a cosign signature bundle, an SBOM (SPDX) and SLSA provenance. Verify with `cosign verify-blob` (exact commands in release notes).
 
 ## For contributors
 No secrets in code, tests or fixtures (use canary values). Run `make security` (govulncheck, gosec, license check) before opening a PR.
