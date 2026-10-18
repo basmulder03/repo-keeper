@@ -206,7 +206,6 @@ func TestBuild_BrokenLinkFailsTheBuild(t *testing.T) {
 	write("go.mod", "module example.com/m\n\ngo 1.26\n")
 	write("VERSION", "1.0.0\n")
 	write("scripts/install.sh", "VERSION=\"${REPO_KEEPER_VERSION:-}\"\n")
-	write("scripts/install.ps1", "[string]$Version = $env:REPO_KEEPER_VERSION\n")
 	b := &build{Repo: repo, Out: t.TempDir(), Bin: fakeBinary(t), RepoURL: "https://github.com/o/r", Branch: "main", Version: "1.0.0", Commit: "x", Date: time.Now()}
 	if err := b.generate(); err == nil || !strings.Contains(err.Error(), "NOPE.md") {
 		t.Fatalf("err=%v", err)
@@ -242,11 +241,6 @@ func TestInstall_NoPublishedRelease_PinsVERSIONAndSaysSo(t *testing.T) {
 	sum := sha256.Sum256(script)
 	if !strings.Contains(h, hex.EncodeToString(sum[:])) {
 		t.Errorf("the page must show the SHA-256 of the script it serves")
-	}
-	ps, _ := os.ReadFile(filepath.Join(b.Out, "install.ps1")) //nolint:gosec // temp output
-	psSum := sha256.Sum256(ps)
-	if strings.Contains(string(ps), "9.9.9-test") || !strings.Contains(h, hex.EncodeToString(psSum[:])) {
-		t.Errorf("install.ps1 must stay unpinned (it resolves the latest release) and have its SHA-256 on the page")
 	}
 }
 

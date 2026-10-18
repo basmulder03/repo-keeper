@@ -5,14 +5,14 @@ linux/macOS/windows × amd64/arm64, static binaries, built by GoReleaser in GitH
 
 ## Install channels
 
-Shipped now (Linux; Windows zips are built by GoReleaser and installed by `scripts/install.ps1`, winget or Scoop; the `.exe` files are deliberately **not** Authenticode-signed, see below; macOS has no build yet):
+Shipped now (Linux; Windows zips are built by GoReleaser and installed through winget or Scoop; macOS has no build yet):
 
 | Channel | Notes |
 |---|---|
 | Nix flake (`packages`, `apps`, `homeManagerModules.default`, `nixosModules.default`) | First-class; both modules are evaluated and asserted by `nix flake check` (the generated config must pass `repo-keeper config validate`) |
 | `.deb` / `.rpm` (amd64, arm64) | Built by GoReleaser/nfpm; user units under `/usr/lib/systemd/user/`, not enabled automatically |
-| Windows zip (amd64, arm64) + `install.ps1` | Verified like the Linux installer (cosign, SHA-256); the PowerShell download sets no Mark-of-the-Web, so the checks, not SmartScreen, are the trust anchor. The `.exe` files are unsigned |
-| winget, Scoop | GoReleaser writes the manifests into `dist/` (`skip_upload`); a maintainer submits them after publishing the release (below). Neither sets Mark-of-the-Web, so SmartScreen does not prompt |
+| Windows zip (amd64, arm64) | Built by GoReleaser; the `.exe` files are not Authenticode-signed |
+| winget, Scoop | GoReleaser writes the manifests into `dist/` (`skip_upload`); a maintainer submits them after publishing the release (below). Neither sets Mark-of-the-Web, so SmartScreen does not prompt; they are the supported Windows install routes |
 | Tarball (amd64, arm64) | Binaries, LICENSE, install guide, example units |
 
 Planned: Homebrew tap, AUR, container image (headless servers). See [INSTALL](INSTALL.md).
@@ -24,7 +24,7 @@ Behaviours that heuristics associate with malware: background persistence, readi
 
 | Risk | Mitigation |
 |---|---|
-| Unsigned binary / no reputation | Windows `.exe` files are **unsigned** (the SignPath Foundation's requirements are not met and a paid certificate or Azure Artifact Signing is not worth it yet). Instead: `install.ps1`, winget and Scoop never set Mark-of-the-Web so SmartScreen stays quiet, every release is cosign-signed and checksummed, and each release goes to the Defender false-positive portal. Known gaps: a zip downloaded in a browser shows the SmartScreen warning, and Windows 11 with Smart App Control enforced blocks unsigned executables; revisit Azure Artifact Signing if either bites. macOS Developer ID + notarization when macOS ships |
+| Unsigned binary / no reputation | Windows `.exe` files are **unsigned** (the SignPath Foundation's requirements are not met and a paid certificate or Azure Artifact Signing is not worth it yet). Instead: winget and Scoop never set Mark-of-the-Web so SmartScreen stays quiet, every release is cosign-signed and checksummed, and each release goes to the Defender false-positive portal. Known gaps: a zip downloaded in a browser shows the SmartScreen warning, and Windows 11 with Smart App Control enforced blocks unsigned executables; revisit Azure Artifact Signing if either bites. macOS Developer ID + notarization when macOS ships |
 | Packers/obfuscation | **Never** use UPX or obfuscators; ship plain, reproducible binaries |
 | Suspicious persistence | Documented, user-initiated `install-service`; visible in standard OS UIs; clean uninstall; no self-hiding |
 | Credential-store access | Only our own entries via official OS APIs; no enumeration of other apps' secrets |

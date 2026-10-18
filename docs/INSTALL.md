@@ -1,6 +1,6 @@
 # Installing repo-keeper
 
-repo-keeper runs as a per-user background service (no root, no system service). Linux is the primary platform; Windows builds exist but their executables are not code-signed (see the Windows notes below); macOS has no build yet.
+repo-keeper runs as a per-user background service (no root, no system service). Linux is the primary platform; Windows is available through winget and Scoop; macOS has no build yet.
 
 ## Quick install
 
@@ -25,19 +25,16 @@ The script downloads the latest stable release (or the one you name with `--vers
 
 The shorter `curl -fsSL https://basmulder03.github.io/repo-keeper/install.sh | sh` works too, but then the script itself arrives unverified; the read-first form above lets you check it against the published checksum. macOS has no installer yet.
 
-**Windows 10/11, amd64 or arm64** (PowerShell, installs to `%LOCALAPPDATA%\Programs\repo-keeper\bin` and adds it to your user PATH, no admin needed):
+**Windows 10/11, amd64 or arm64** (per user, no admin needed):
 
 ```powershell
-Invoke-WebRequest https://basmulder03.github.io/repo-keeper/install.ps1 -OutFile install.ps1
-Get-FileHash install.ps1    # compare with the checksum on the Install page of the site
-powershell -ExecutionPolicy Bypass -File .\install.ps1
+winget install basmulder03.repo-keeper
+# or
+scoop bucket add repo-keeper https://github.com/basmulder03/scoop-bucket
+scoop install repo-keeper
 ```
 
-`install.ps1` does the same checks as the Linux script (cosign signature of `checksums.txt`, then the archive's SHA-256, nothing installed on any failure) and installs the latest stable release unless you pass `-Version X.Y.Z` (needed for a pre-release). Other options: `-Prefix DIR` and `-SkipSignature`. Get cosign with `winget install sigstore.cosign` or `scoop install cosign`. Then `repo-keeper install-service` registers the per-user Task Scheduler autostart.
-
-Once the manifests are accepted you can also use `winget install basmulder03.repo-keeper` or `scoop bucket add repo-keeper https://github.com/basmulder03/scoop-bucket` followed by `scoop install repo-keeper`. Both verify the archive hash, but not the cosign signature; `install.ps1` does.
-
-**About the Windows warnings.** The executables are not Authenticode-signed. The script, winget and Scoop do not trigger SmartScreen. A zip you download in a browser will, and Windows 11 with Smart App Control enforced refuses unsigned programs altogether; in that case use another route or turn Smart App Control off (it cannot be turned back on without reinstalling Windows). Antivirus tools may flag a young Go binary; verify the signature and checksum, and report false positives to the vendor.
+Then `repo-keeper install-service` registers the per-user Task Scheduler autostart. Both routes verify the archive hash. The zip on each GitHub release is signed through `checksums.txt` with cosign, like the Linux tarball.
 
 Debian, Ubuntu and Fedora packages are in the next sections; the Install page of the documentation site shows ready-to-paste commands pinned to the newest published release.
 

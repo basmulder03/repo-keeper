@@ -18,7 +18,7 @@ A lightweight, local-first background agent that keeps every repository you can 
 2. **Least privilege.** Read-only tokens by default; secrets live in the OS keychain only.
 3. **Lightweight.** One static binary, no runtime, idle ≈ 0% CPU, <50 MB RSS.
 4. **Polite.** Official APIs only, identifiable User-Agent, honors `Retry-After` and rate-limit headers.
-5. **Boring to install.** Reproducible releases with cosign-signed checksums, SBOMs and build provenance; user-level autostart, no admin rights. Windows executables are not Authenticode-signed (see [Distribution](docs/DISTRIBUTION.md)).
+5. **Boring to install.** Reproducible releases with cosign-signed checksums, SBOMs and build provenance; user-level autostart, no admin rights.
 
 ## How this is built (AI assistance)
 
