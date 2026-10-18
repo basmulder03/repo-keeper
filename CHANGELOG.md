@@ -2,7 +2,7 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
-## Unreleased
+## 0.1.0-beta.6
 
 ### Fixed
 - `stop` now returns only when the daemon has really exited (control endpoint closed and instance lock released), so `stop && start` can no longer race the shutdown and report "already running".
