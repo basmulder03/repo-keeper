@@ -205,7 +205,7 @@ func TestBuild_BrokenLinkFailsTheBuild(t *testing.T) {
 	write("README.md", "# Home\n\n[gone](docs/NOPE.md)\n")
 	write("go.mod", "module example.com/m\n\ngo 1.26\n")
 	write("VERSION", "1.0.0\n")
-	write("scripts/install.sh", "VERSION=\"${REPO_KEEPER_VERSION:-@VERSION@}\"\n")
+	write("scripts/install.sh", "VERSION=\"${REPO_KEEPER_VERSION:-}\"\n")
 	b := &build{Repo: repo, Out: t.TempDir(), Bin: fakeBinary(t), RepoURL: "https://github.com/o/r", Branch: "main", Version: "1.0.0", Commit: "x", Date: time.Now()}
 	if err := b.generate(); err == nil || !strings.Contains(err.Error(), "NOPE.md") {
 		t.Fatalf("err=%v", err)
@@ -235,11 +235,8 @@ func TestInstall_NoPublishedRelease_PinsVERSIONAndSaysSo(t *testing.T) {
 	if !strings.Contains(h, "No release is published yet") || !strings.Contains(h, "v9.9.9-test") {
 		t.Errorf("page must be honest that nothing is published: %.300s", h)
 	}
-	if !strings.Contains(s, `VERSION="${REPO_KEEPER_VERSION:-9.9.9-test}"`) {
-		t.Errorf("script is not pinned")
-	}
-	if !strings.Contains(s, `@VERSION@|"") die`) {
-		t.Errorf("the unpinned-copy guard must keep its placeholder, or the pinned version would be rejected")
+	if strings.Contains(s, "9.9.9-test") {
+		t.Errorf("install.sh must stay unpinned (it resolves the latest release)")
 	}
 	sum := sha256.Sum256(script)
 	if !strings.Contains(h, hex.EncodeToString(sum[:])) {
@@ -267,8 +264,8 @@ func TestInstall_PinsNewestPublishedRelease_IgnoresDrafts(t *testing.T) {
 	if h := read("install.html"); !strings.Contains(h, "v2.0.0-beta.2") || strings.Contains(h, "v2.0.0-beta.9") || strings.Contains(h, "No release is published yet") {
 		t.Errorf("must pin the newest PUBLISHED release: %.400s", h)
 	}
-	if s := read("install.sh"); !strings.Contains(s, `:-2.0.0-beta.2}`) {
-		t.Errorf("script pinned to the wrong release")
+	if s := read("install.sh"); strings.Contains(s, "2.0.0-beta.2") {
+		t.Errorf("install.sh must stay unpinned")
 	}
 	c := read("changelog.html")
 	if !strings.Contains(c, `href="https://x/a.tgz"`) || strings.Contains(c, "https://x/s\"") || !strings.Contains(c, "pre-release") || strings.Contains(c, "v2.0.0-beta.9") {
