@@ -2,7 +2,7 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
-## Unreleased
+## 0.1.0-beta.7
 
 ### Changed
 - **Release signatures are now a single cosign bundle** (`checksums.txt.sigstore.json`) made with cosign 3, replacing `checksums.txt.sig` and `.pem`. `install.sh`, `repo-keeper update` and the commands on the Install page verify it with `cosign verify-blob --bundle` (cosign 2.2 or newer). Releases up to 0.1.0-beta.5 keep their `.sig`/`.pem` and can no longer be installed with `install.sh --version`; verify those by hand.
