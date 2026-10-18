@@ -104,8 +104,8 @@ run "unknown release" 1 COSIGN_RC=0 -- --version 9.9.9
 expect_out "is v9.9.9 a published release"; expect_none
 run "injection attempt in version" 1 COSIGN_RC=0 -- --version '1.0;touch pwned'
 expect_out "unusable version"; [ ! -e "$T/pwned" ] && [ ! -e pwned ] && ok "  nothing executed" || bad "  injection executed"
-run "no version pinned" 1 COSIGN_RC=0 -- 
-expect_out "no version pinned"
+run "no version on a mirror" 1 COSIGN_RC=0 -- 
+expect_out "cannot look up the latest release on a mirror"
 run "unknown option" 1 COSIGN_RC=0 -- --nope
 expect_out "unknown option"
 

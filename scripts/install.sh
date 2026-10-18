@@ -5,6 +5,7 @@
 #
 #   sh install.sh [--version X.Y.Z] [--prefix DIR] [--no-units] [--skip-signature]
 #
+# --version   default: the latest published release (GitHub's "latest", which skips drafts and pre-releases).
 # --prefix     default ~/.local (binaries go to DIR/bin). The systemd user units expect ~/.local/bin.
 # --no-units   do not copy the systemd user units into ~/.config/systemd/user.
 # --skip-signature  only for machines without cosign: the SHA-256 is still checked, but the checksum file itself is then
@@ -12,7 +13,7 @@
 # Environment: REPO_KEEPER_VERSION, REPO_KEEPER_BASE_URL (a mirror or a local test server; the signature identity stays pinned).
 set -eu
 
-VERSION="${REPO_KEEPER_VERSION:-@VERSION@}"
+VERSION="${REPO_KEEPER_VERSION:-}"
 BASE="${REPO_KEEPER_BASE_URL:-https://github.com/basmulder03/repo-keeper/releases/download}"
 PREFIX="${HOME}/.local"
 UNITS=1
@@ -27,18 +28,10 @@ while [ $# -gt 0 ]; do
     --prefix) [ $# -ge 2 ] || die "--prefix needs a value"; PREFIX="$2"; shift 2 ;;
     --no-units) UNITS=0; shift ;;
     --skip-signature) SKIP_SIG=1; shift ;;
-    -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option $1 (try --help)" ;;
   esac
 done
-
-case "$VERSION" in
-  @VERSION@|"") die "no version pinned in this copy of the script; pass --version X.Y.Z (see https://github.com/basmulder03/repo-keeper/releases)" ;;
-esac
-VERSION="${VERSION#v}"
-case "$VERSION" in
-  *[!0-9A-Za-z.-]*|-*|.*) die "unusable version '$VERSION'" ;;
-esac
 
 [ "$(uname -s)" = "Linux" ] || die "this installer supports Linux only; macOS and Windows builds are not published yet (see the install page for Nix)"
 case "$(uname -m)" in
@@ -48,6 +41,22 @@ case "$(uname -m)" in
 esac
 
 command -v curl >/dev/null 2>&1 || die "curl is required"
+if [ -z "$VERSION" ]; then
+  [ -z "${REPO_KEEPER_BASE_URL:-}" ] || die "cannot look up the latest release on a mirror; pass --version X.Y.Z"
+  # GitHub's /releases/latest redirects to the newest stable tag; no API call, no token
+  final="$(curl --fail --silent --show-error --location --proto "=https" --tlsv1.2 --head --output /dev/null --write-out '%{url_effective}' https://github.com/basmulder03/repo-keeper/releases/latest)" \
+    || die "could not look up the latest release; pass --version X.Y.Z (see https://github.com/basmulder03/repo-keeper/releases)"
+  case "$final" in
+    */releases/tag/*) VERSION="${final##*/releases/tag/}" ;;
+    *) die "no stable release is published yet; pass --version X.Y.Z for a pre-release (see https://github.com/basmulder03/repo-keeper/releases)" ;;
+  esac
+  say "latest release is $VERSION"
+fi
+VERSION="${VERSION#v}"
+case "$VERSION" in
+  *[!0-9A-Za-z.-]*|-*|.*|"") die "unusable version '$VERSION'" ;;
+esac
+
 command -v tar >/dev/null 2>&1 || die "tar is required"
 if command -v sha256sum >/dev/null 2>&1; then
   sum() { sha256sum "$1" | cut -d' ' -f1; }
