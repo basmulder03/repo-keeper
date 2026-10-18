@@ -2,10 +2,12 @@ name: release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch: # started by tag-release.yml, run on the tag so the signing identity is still refs/tags/vX
 permissions:
   contents: read
 jobs:
   release:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write       # create the (draft) release
