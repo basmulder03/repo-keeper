@@ -101,6 +101,9 @@ func (s *Server) Serve(ctx context.Context, l net.Listener, runtimePath string) 
 	s.Log.Info("web UI listening", "addr", s.addr)
 	select {
 	case <-ctx.Done():
+		if runtimePath != "" {
+			_ = os.Remove(runtimePath) // before the listener closes, so "not answering" implies "file gone" for `stop`
+		}
 		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(sctx)
