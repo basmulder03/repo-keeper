@@ -1,5 +1,7 @@
 # repo-keeper
 
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15652/badge)](https://www.bestpractices.dev/projects/15652)
+
 A lightweight, local-first background agent that keeps every repository you can access on GitHub, GitLab, Bitbucket, Azure DevOps and Gitea/Forgejo cloned and up to date, safely.
 
 > **Status:** beta. GitHub and GitLab are verified end to end; Gitea/Forgejo, Bitbucket Cloud, Azure DevOps and plain git remotes are implemented and fixture-tested but not yet verified against live servers. The sync engine, safe cleanup, rate limiting, daemon, web UI, tray, packaging, hardening and fuzzing are done and measured; the beta soak is next. See [`docs/`](docs/README.md), [installation](docs/INSTALL.md), [security review](docs/SECURITY-REVIEW.md) and the [roadmap](docs/ROADMAP.md).
