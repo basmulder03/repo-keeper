@@ -18,7 +18,20 @@ A lightweight, local-first background agent that keeps every repository you can 
 2. **Least privilege.** Read-only tokens by default; secrets live in the OS keychain only.
 3. **Lightweight.** One static binary, no runtime, idle ≈ 0% CPU, <50 MB RSS.
 4. **Polite.** Official APIs only, identifiable User-Agent, honors `Retry-After` and rate-limit headers.
-5. **Boring to install.** Signed, notarized, reproducible releases; user-level autostart, no admin rights.
+5. **Boring to install.** Reproducible releases with cosign-signed checksums, SBOMs and build provenance; user-level autostart, no admin rights. Windows executables are not Authenticode-signed (see [Distribution](docs/DISTRIBUTION.md)).
+
+## How this is built (AI assistance)
+
+Much of this code is written with AI coding assistants. That is a reason to check the work, so the project is set up to make it checkable rather than taken on trust:
+
+- **Rules for the assistants** are in [AGENTS.md](AGENTS.md) and are enforced, not just requested: git runs only through one hardened package, every outbound call goes through one rate-limited client, secrets never touch logs, argv or config, and nothing may update or download-and-execute code on its own (a test fails the build if the update code is imported from anywhere else).
+- **Safety-critical logic fails closed and is tested exhaustively**: the cleanup safety invariant is checked over every combination of branch facts (100% coverage required on it), and the config parser, ref-name sanitiser and rate-limit header parsers are fuzzed.
+- **Every change must pass** `make test lint security`: race-detector tests with a coverage gate (85% overall), `golangci-lint`, `gosec`, `govulncheck`, CodeQL and OpenSSF Scorecard in CI.
+- **The design is written down before the code**: [requirements](docs/REQUIREMENTS.md), [architecture](docs/ARCHITECTURE.md), a [threat model](docs/THREAT-MODEL.md) and [ADRs](docs/adr/), plus a [security self-review](docs/SECURITY-REVIEW.md) that lists what was and was not verified.
+- **Releases are verifiable**: reproducible builds, an SPDX SBOM per archive, cosign keyless signatures on the checksums and GitHub build-provenance attestations. The installers check these before installing anything.
+- **Tests never touch your home directory, keychain or the network.**
+
+None of this makes the code correct by itself. Read the source, start with cleanup in dry-run (the default), and report anything wrong through [SECURITY.md](SECURITY.md) or an issue.
 
 ## Documentation
 

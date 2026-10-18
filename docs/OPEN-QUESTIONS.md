@@ -9,7 +9,7 @@
 | 5 | Cleanup | User-configurable (`off`/`dry-run`/`auto`, global + per repo); safeguards always on (never dirty, never current/default/unmerged); **every removal tracked in an audit journal** |
 | 6 | Remote branches | **Never deleted.** Local-only mutation; no write scopes requested |
 | 7 | Providers | GitHub first; provider interface must make adding others easy (proved by M4) |
-| 8 | Windows signing | Deferred until a Windows release; start with Linux/NixOS |
+| 8 | Windows signing | Decided: ship unsigned (SignPath Foundation requirements not met); revisit Azure Artifact Signing if SmartScreen or Smart App Control complaints appear |
 | 9 | OAuth apps | **Bring-your-own client ID** by default (device flow, no secret to ship); project-registered app optional later |
 | 10 | Clone layout | Tree with N-level namespace (`provider/ns…/repo`; covers GitLab subgroups, Azure DevOps org/project) |
 | 11 | Headless | Daemon + CLI + container supported, **UI ships from the first version** (with debug options) |

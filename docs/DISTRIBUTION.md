@@ -5,15 +5,17 @@ linux/macOS/windows × amd64/arm64, static binaries, built by GoReleaser in GitH
 
 ## Install channels
 
-Shipped now (Linux only; Windows and macOS binaries are deliberately not published until they can be code-signed, because unsigned executables are exactly what SmartScreen and antivirus engines distrust):
+Shipped now (Linux; Windows zips are built by GoReleaser and installed by `scripts/install.ps1`, winget or Scoop; the `.exe` files are deliberately **not** Authenticode-signed, see below; macOS has no build yet):
 
 | Channel | Notes |
 |---|---|
 | Nix flake (`packages`, `apps`, `homeManagerModules.default`, `nixosModules.default`) | First-class; both modules are evaluated and asserted by `nix flake check` (the generated config must pass `repo-keeper config validate`) |
 | `.deb` / `.rpm` (amd64, arm64) | Built by GoReleaser/nfpm; user units under `/usr/lib/systemd/user/`, not enabled automatically |
+| Windows zip (amd64, arm64) + `install.ps1` | Verified like the Linux installer (cosign, SHA-256); the PowerShell download sets no Mark-of-the-Web, so the checks, not SmartScreen, are the trust anchor. The `.exe` files are unsigned |
+| winget, Scoop | GoReleaser writes the manifests into `dist/` (`skip_upload`); a maintainer submits them after publishing the release (below). Neither sets Mark-of-the-Web, so SmartScreen does not prompt |
 | Tarball (amd64, arm64) | Binaries, LICENSE, install guide, example units |
 
-Planned: Homebrew tap, AUR, winget/Scoop (after signing), container image (headless servers). See [INSTALL](INSTALL.md).
+Planned: Homebrew tap, AUR, container image (headless servers). See [INSTALL](INSTALL.md).
 
 `repo-keeper install-service` / `uninstall-service` register per-user autostart using **official** mechanisms only: systemd `--user`, launchd LaunchAgent, Windows Task Scheduler (per-user, "at logon"). No registry Run-key hacks beyond that, no admin, no drivers, no services running as SYSTEM.
 
@@ -22,7 +24,7 @@ Behaviours that heuristics associate with malware: background persistence, readi
 
 | Risk | Mitigation |
 |---|---|
-| Unsigned binary / no reputation | **Authenticode signing** (free for OSS via SignPath Foundation, or an EV/OV cert), macOS Developer ID + notarization, cosign for everything |
+| Unsigned binary / no reputation | Windows `.exe` files are **unsigned** (the SignPath Foundation's requirements are not met and a paid certificate or Azure Artifact Signing is not worth it yet). Instead: `install.ps1`, winget and Scoop never set Mark-of-the-Web so SmartScreen stays quiet, every release is cosign-signed and checksummed, and each release goes to the Defender false-positive portal. Known gaps: a zip downloaded in a browser shows the SmartScreen warning, and Windows 11 with Smart App Control enforced blocks unsigned executables; revisit Azure Artifact Signing if either bites. macOS Developer ID + notarization when macOS ships |
 | Packers/obfuscation | **Never** use UPX or obfuscators; ship plain, reproducible binaries |
 | Suspicious persistence | Documented, user-initiated `install-service`; visible in standard OS UIs; clean uninstall; no self-hiding |
 | Credential-store access | Only our own entries via official OS APIs; no enumeration of other apps' secrets |
@@ -37,6 +39,12 @@ Build hygiene: `CGO_ENABLED=0`, `-trimpath`, `-ldflags "-s -w"` only (stripping 
 
 ## Supply-chain assurance
 SBOM (SPDX/CycloneDX via syft), SLSA provenance (`slsa-github-generator`), cosign keyless signatures, checksums, OpenSSF Scorecard ≥ 7, branch protection + required reviews, Dependabot/Renovate, `go mod verify`, reproducible build check in CI (build twice, diff).
+
+## Publishing the winget and Scoop manifests
+After a release is published (not while it is a draft: the manifests point at the public download URLs and carry the archive hashes):
+1. Scoop: copy `dist/repo-keeper.json` into the `basmulder03/scoop-bucket` repository (`bucket/repo-keeper.json`) and push. Users run `scoop bucket add repo-keeper https://github.com/basmulder03/scoop-bucket` then `scoop install repo-keeper`.
+2. winget: copy `dist/winget/manifests/...` into a fork of `microsoft/winget-pkgs` under the same relative path and open a pull request; its validation bot checks the hashes and scans the installer. After it merges, `winget install basmulder03.repo-keeper` works.
+Check both with a throwaway user before announcing.
 
 ## Uninstall & data
 `repo-keeper uninstall-service`, remove binary via package manager. Data dirs (XDG / `~/Library/Application Support` / `%AppData%`) are documented; `repo-keeper purge` removes state and keychain entries but **never** the cloned repositories.
