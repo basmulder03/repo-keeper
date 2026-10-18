@@ -10,6 +10,8 @@ One version, one place: the `VERSION` file. The Nix flake reads it, the release 
 
 Needs the repository setting "Allow GitHub Actions to create and approve pull requests" (Settings, Actions, General).
 
+After you publish the draft, the **smoke-install** workflow installs the release on clean machines through `install.sh`, the verified tarball, `.deb`, `.rpm`, Scoop and `nix run`, and opens an issue when a channel fails. Run it by hand with `gh workflow run smoke-install.yml -f tag=vX`. It is not a required check. winget is covered by the validation bot on the `winget-pkgs` pull request.
+
 ## Flagging a security fix
 
 The background update check marks a release as urgent when its notes contain a `### Security` heading (any level), a `- Security:` list item, or a CVE identifier. Write those notes in the GitHub release body (the changelog section is the natural source), so every installation that has the check turned on is told, in `status`, `doctor` and the web interface, that this release is worth updating to promptly.
