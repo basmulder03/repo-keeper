@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Linux-only for now: Windows and macOS binaries are not shipped until they can be signed (see docs/DISTRIBUTION.md).
+# Windows .exe files are not code-signed (see docs/DISTRIBUTION.md); the scoop and winget manifests are only generated into dist/, never pushed.
 version: 2
 project_name: repo-keeper
 
@@ -28,9 +28,28 @@ builds:
     hooks:
       post: "touch -d @{{ .Env.SOURCE_DATE_EPOCH }} {{ .Path }}" # reproducible mtime; set SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
     ldflags: ["-s -w -X main.version={{ .Version }}"]
+  - id: repo-keeper-windows
+    main: ./cmd/repo-keeper
+    binary: repo-keeper
+    env: [CGO_ENABLED=0]
+    goos: [windows]
+    mod_timestamp: "{{ .CommitTimestamp }}" # reproducible zip entries
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags: ["-s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }}"]
+  - id: repo-keeper-tray-windows
+    main: ./cmd/repo-keeper-tray
+    binary: repo-keeper-tray
+    env: [CGO_ENABLED=0]
+    goos: [windows]
+    mod_timestamp: "{{ .CommitTimestamp }}" # reproducible zip entries
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags: ["-s -w -H=windowsgui -X main.version={{ .Version }}"] # windowsgui: no console window behind the tray icon
 
 archives:
   - id: default
+    ids: [repo-keeper, repo-keeper-tray]
     formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
@@ -43,6 +62,17 @@ archives:
       - src: packaging/systemd/*.service
         dst: systemd
         strip_parent: true
+        info: {owner: root, group: root, mtime: "2020-01-01T00:00:00Z"}
+  - id: windows
+    ids: [repo-keeper-windows, repo-keeper-tray-windows]
+    formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - src: LICENSE
+        info: {owner: root, group: root, mtime: "2020-01-01T00:00:00Z"}
+      - src: README.md
+        info: {owner: root, group: root, mtime: "2020-01-01T00:00:00Z"}
+      - src: docs/INSTALL.md
         info: {owner: root, group: root, mtime: "2020-01-01T00:00:00Z"}
 
 nfpms:
@@ -95,6 +125,29 @@ signs:
     args: [sign-blob, --yes, "--output-signature=${signature}", "--output-certificate=${certificate}", "${artifact}"]
     certificate: "${artifact}.pem"
     signature: "${artifact}.sig"
+
+# skip_upload: manifests land in dist/ for a human to submit after the release is published (docs/DISTRIBUTION.md)
+scoops:
+  - name: repo-keeper
+    ids: [windows]
+    skip_upload: true
+    homepage: https://github.com/basmulder03/repo-keeper
+    description: Keeps local clones of your remote repositories in sync, safely.
+    license: Apache-2.0
+    repository: {owner: basmulder03, name: scoop-bucket}
+
+winget:
+  - name: repo-keeper
+    package_identifier: basmulder03.repo-keeper
+    publisher: basmulder03
+    publisher_url: https://github.com/basmulder03
+    homepage: https://github.com/basmulder03/repo-keeper
+    short_description: Keeps local clones of your remote repositories in sync, safely.
+    license: Apache-2.0
+    license_url: https://github.com/basmulder03/repo-keeper/blob/main/LICENSE
+    ids: [windows]
+    skip_upload: true
+    repository: {owner: basmulder03, name: winget-pkgs}
 
 changelog:
   use: git
