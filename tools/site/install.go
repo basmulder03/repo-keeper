@@ -35,7 +35,8 @@ func genInstall(b *build) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	script := string(src) // not pinned: it resolves the latest release itself
+	// not pinned: the script resolves the latest release itself
+	script := string(src)
 	if err := os.WriteFile(filepath.Join(b.Out, "install.sh"), []byte(script), 0o600); err != nil { //nolint:gosec // served as a static file
 		return "", err
 	}

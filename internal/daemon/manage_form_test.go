@@ -3,6 +3,7 @@
 package daemon
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"testing"
@@ -29,5 +30,12 @@ func TestBuildAccount_NoCredential_OnlyForGenericGit(t *testing.T) {
 	_, problems := buildAccount(ui.AccountForm{Name: "gh", Provider: "github", Auth: "none"}, nil)
 	if len(problems) != 1 || !strings.Contains(problems[0], "Only generic git") {
 		t.Fatalf("problems=%v", problems)
+	}
+}
+
+func TestAddRepo_RelativePath_Rejected(t *testing.T) {
+	err := uiBackend{&Daemon{}}.AddRepo(context.Background(), ui.RepoForm{Path: "../x"})
+	if err == nil || !strings.Contains(err.Error(), "absolute") {
+		t.Fatalf("err=%v", err)
 	}
 }

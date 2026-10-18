@@ -239,6 +239,10 @@ func (b uiBackend) AddRepo(_ context.Context, f ui.RepoForm) error {
 	if r.Path == "" {
 		return ui.Invalid("A repository path is required.")
 	}
+	if !filepath.IsAbs(r.Path) {
+		return ui.Invalid("The repository path must be absolute.")
+	}
+	r.Path = filepath.Clean(r.Path)
 	if fi, err := os.Stat(filepath.Join(r.Path, ".git")); err != nil || fi == nil {
 		return ui.Invalid(r.Path + " is not a git repository (no .git inside).")
 	}
