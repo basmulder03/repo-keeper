@@ -196,7 +196,7 @@ func genReleases(b *build) (string, error) {
 		}
 		var files []string
 		for _, a := range r.Assets {
-			if strings.HasSuffix(a.Name, ".sig") || strings.HasSuffix(a.Name, ".pem") || strings.HasSuffix(a.Name, ".spdx.json") {
+			if strings.HasSuffix(a.Name, ".sigstore.json") || strings.HasSuffix(a.Name, ".spdx.json") {
 				continue
 			}
 			files = append(files, fmt.Sprintf("<a href=\"%s\">%s</a>", html.EscapeString(a.URL), html.EscapeString(a.Name)))

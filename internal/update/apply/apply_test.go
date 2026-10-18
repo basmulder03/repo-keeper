@@ -211,7 +211,7 @@ type fakeVerifier struct {
 	args []string
 }
 
-func (f *fakeVerifier) Verify(_ context.Context, _, _, _ []byte, identity, issuer string) error {
+func (f *fakeVerifier) Verify(_ context.Context, _, _ []byte, identity, issuer string) error {
 	f.args = []string{identity, issuer}
 	return f.err
 }
@@ -238,8 +238,7 @@ func newSite(t *testing.T, tag string, mutate func(*site)) *site {
 	base := "/o/r/releases/download/" + tag + "/"
 	mux.HandleFunc(base+name, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(s.archive) })
 	mux.HandleFunc(base+"checksums.txt", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(s.sums)) })
-	mux.HandleFunc(base+"checksums.txt.sig", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("sig")) })
-	mux.HandleFunc(base+"checksums.txt.pem", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("pem")) })
+	mux.HandleFunc(base+"checksums.txt.sigstore.json", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("bundle")) })
 	mux.HandleFunc("/repos/o/r/commits/"+tag, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"sha":"abc123def456"}`)) })
 	mux.HandleFunc("/repos/o/r/actions/runs", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("head_sha") != "abc123def456" {
@@ -257,7 +256,7 @@ func (s *site) release(t *testing.T, assetURLs map[string]string) update.Release
 	t.Helper()
 	name := "repo-keeper_" + strings.TrimPrefix(s.tag, "v") + "_linux_amd64.tar.gz"
 	r := update.Release{Tag: s.tag, URL: "https://x/rel"}
-	for _, f := range []string{name, "checksums.txt", "checksums.txt.sig", "checksums.txt.pem"} {
+	for _, f := range []string{name, "checksums.txt", "checksums.txt.sigstore.json"} {
 		u := s.srv.URL + "/o/r/releases/download/" + s.tag + "/" + f
 		if o, ok := assetURLs[f]; ok {
 			u = o
@@ -322,8 +321,8 @@ func TestGather_RefusesAssetsFromAnywhereElse(t *testing.T) {
 		"another repository":  {"checksums.txt": s.srv.URL + "/evil/r/releases/download/v1.0.0/checksums.txt"},
 		"subdirectory trick":  {name: s.srv.URL + "/o/r/releases/download/v1.0.0/../" + name},
 		"query string":        {name: s.srv.URL + "/o/r/releases/download/v1.0.0/" + name + "?x=1"},
-		"signature elsewhere": {"checksums.txt.sig": "https://evil.example/sig"},
-		"missing signature":   {"checksums.txt.sig": ""},
+		"signature elsewhere": {"checksums.txt.sigstore.json": "https://evil.example/sig"},
+		"missing signature":   {"checksums.txt.sigstore.json": ""},
 	} {
 		if _, err := s.source(t, &fakeVerifier{}).Gather(context.Background(), s.release(t, override)); err == nil {
 			t.Errorf("%s: accepted", label)
@@ -394,12 +393,12 @@ func TestCosignCLI_ExactIdentityIssuerAndFailureMessage(t *testing.T) {
 	if !c.Available() {
 		t.Fatal("shim not found")
 	}
-	if err := c.Verify(context.Background(), []byte("sums"), []byte("sig"), []byte("pem"), "ID", "ISS"); err != nil {
+	if err := c.Verify(context.Background(), []byte("sums"), []byte("bundle"), "ID", "ISS"); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(log) //nolint:gosec // temp file
 	args := string(b)
-	for _, want := range []string{"verify-blob", "--certificate\n", "--signature\n", "--certificate-identity\nID\n", "--certificate-oidc-issuer\nISS\n"} {
+	for _, want := range []string{"verify-blob", "--bundle\n", "--certificate-identity\nID\n", "--certificate-oidc-issuer\nISS\n"} {
 		if !strings.Contains(args, want) {
 			t.Errorf("missing %q in\n%s", want, args)
 		}
@@ -408,13 +407,13 @@ func TestCosignCLI_ExactIdentityIssuerAndFailureMessage(t *testing.T) {
 		t.Errorf("a pattern flag would let another tag's signature through:\n%s", args)
 	}
 	t.Setenv("COSIGN_FAIL", "1")
-	if err := c.Verify(context.Background(), nil, nil, nil, "ID", "ISS"); err == nil || !strings.Contains(err.Error(), "expected identities") {
+	if err := c.Verify(context.Background(), nil, nil, "ID", "ISS"); err == nil || !strings.Contains(err.Error(), "expected identities") {
 		t.Fatalf("failure must carry cosign's reason: %v", err)
 	}
 	if (CosignCLI{Path: filepath.Join(dir, "missing")}).Available() {
 		t.Fatal("a missing program is not available")
 	}
-	if err := (CosignCLI{Path: filepath.Join(dir, "missing")}).Verify(context.Background(), nil, nil, nil, "a", "b"); !errors.Is(err, ErrNoCosign) {
+	if err := (CosignCLI{Path: filepath.Join(dir, "missing")}).Verify(context.Background(), nil, nil, "a", "b"); !errors.Is(err, ErrNoCosign) {
 		t.Fatalf("err=%v", err)
 	}
 	_ = exec.ErrNotFound

@@ -101,11 +101,11 @@ systemctl --user daemon-reload && systemctl --user enable --now repo-keeper
 
 ## Verifying a release
 
-Every release contains `checksums.txt`, its cosign signature (`.sig`) and certificate (`.pem`), an SPDX SBOM per archive, and GitHub build-provenance attestations.
+Every release contains `checksums.txt`, its cosign bundle (`checksums.txt.sigstore.json`: signature, certificate and transparency-log proof; needs cosign 2.2 or newer), an SPDX SBOM per archive, and GitHub build-provenance attestations.
 
 ```sh
 cosign verify-blob checksums.txt \
-  --certificate checksums.txt.pem --signature checksums.txt.sig \
+  --bundle checksums.txt.sigstore.json \
   --certificate-identity-regexp 'https://github.com/basmulder03/repo-keeper/.github/workflows/release.yml@refs/tags/v.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 sha256sum --check --ignore-missing checksums.txt

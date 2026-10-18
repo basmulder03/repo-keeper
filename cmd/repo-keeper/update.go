@@ -264,8 +264,8 @@ func (a *app) printEvidence(ev apply.Evidence, ch update.Channel, downgrade bool
 		a.printf("source:     tag %s (commit lookup unavailable)\n", ev.Tag)
 	}
 	a.printf("\nVerify it yourself, independently of this program:\n")
-	a.printf("  curl -fsSLO %s -O %s -O %s -O %s\n", ev.Archive.URL, ev.ChecksumsAt, ev.ChecksumsAt+".sig", ev.ChecksumsAt+".pem")
-	a.printf("  cosign verify-blob checksums.txt --certificate checksums.txt.pem --signature checksums.txt.sig \\\n    --certificate-identity %s \\\n    --certificate-oidc-issuer %s\n", ev.Identity, ev.Issuer)
+	a.printf("  curl -fsSLO %s -O %s -O %s\n", ev.Archive.URL, ev.ChecksumsAt, ev.ChecksumsAt+".sigstore.json")
+	a.printf("  cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json \\\n    --certificate-identity %s \\\n    --certificate-oidc-issuer %s\n", ev.Identity, ev.Issuer)
 	a.printf("  sha256sum --check --ignore-missing checksums.txt\n  gh attestation verify %s --repo %s\n", ev.ArchiveName, ev.Repo)
 }
 

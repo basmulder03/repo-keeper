@@ -57,15 +57,15 @@ func genInstall(b *build) (string, error) {
 	h.WriteString("<h3 id=\"pinned-script\">Any Linux (amd64, arm64; installs the latest release, or add <code>--version X.Y.Z</code>)</h3>\n<pre><code>curl -fsSLo install.sh https://basmulder03.github.io/repo-keeper/install.sh\necho '" + sha + "  install.sh' | sha256sum --check\nsh install.sh</code></pre>\n")
 	h.WriteString("<p>SHA-256 of the script published here: <code>" + sha + "</code>. It installs the latest stable release, verifies the signature and the archive checksum before installing, and refuses on any mismatch. <a href=\"install.sh\">Read it first</a>.</p>\n")
 	h.WriteString("<h3 id=\"pinned-deb\">Debian and Ubuntu</h3>\n<pre><code>" + esc(fmt.Sprintf(`a=$(dpkg --print-architecture)   # amd64 or arm64
-for f in repo-keeper_%[1]s_linux_${a}.deb checksums.txt checksums.txt.sig checksums.txt.pem; do curl -fsSLO %[2]s/$f; done
-cosign verify-blob checksums.txt --certificate checksums.txt.pem --signature checksums.txt.sig \
+for f in repo-keeper_%[1]s_linux_${a}.deb checksums.txt checksums.txt.sigstore.json; do curl -fsSLO %[2]s/$f; done
+cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json \
   --certificate-identity %[3]s/.github/workflows/release.yml@refs/tags/%[4]s \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 sha256sum --check --ignore-missing checksums.txt
 sudo apt install ./repo-keeper_%[1]s_linux_${a}.deb`, v, base, b.RepoURL, tag)) + "</code></pre>\n")
 	h.WriteString("<h3 id=\"pinned-rpm\">Fedora and RHEL</h3>\n<pre><code>" + esc(fmt.Sprintf(`a=$(uname -m); [ "$a" = x86_64 ] && a=amd64; [ "$a" = aarch64 ] && a=arm64
-for f in repo-keeper_%[1]s_linux_${a}.rpm checksums.txt checksums.txt.sig checksums.txt.pem; do curl -fsSLO %[2]s/$f; done
-cosign verify-blob checksums.txt --certificate checksums.txt.pem --signature checksums.txt.sig \
+for f in repo-keeper_%[1]s_linux_${a}.rpm checksums.txt checksums.txt.sigstore.json; do curl -fsSLO %[2]s/$f; done
+cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json \
   --certificate-identity %[3]s/.github/workflows/release.yml@refs/tags/%[4]s \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 sha256sum --check --ignore-missing checksums.txt

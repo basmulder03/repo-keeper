@@ -2,13 +2,18 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
+## Unreleased
+
+### Changed
+- **Release signatures are now a single cosign bundle** (`checksums.txt.sigstore.json`) made with cosign 3, replacing `checksums.txt.sig` and `.pem`. `install.sh`, `repo-keeper update` and the commands on the Install page verify it with `cosign verify-blob --bundle` (cosign 2.2 or newer). Releases up to 0.1.0-beta.5 keep their `.sig`/`.pem` and can no longer be installed with `install.sh --version`; verify those by hand.
+
 ## 0.1.0-beta.6
 
 ### Fixed
 - `stop` now returns only when the daemon has really exited (control endpoint closed and instance lock released), so `stop && start` can no longer race the shutdown and report "already running".
 
 ### Added
-- **Windows**: zip builds for amd64 and arm64, a PowerShell installer (`install.ps1`) that verifies the signature and checksum, and Scoop and winget manifests generated with each release. The `.exe` files are not code-signed.
+- **Windows**: zip builds for amd64 and arm64, and Scoop and winget manifests generated with each release (install through winget or Scoop). The `.exe` files are not code-signed.
 - **`repo-keeper update`** (ADR-0021/0022): checks for a newer release and prints the evidence to verify it (release and asset URLs, expected SHA-256, signature identity and issuer, source commit and workflow run, the commands to repeat every check). `--apply` downloads, verifies the cosign signature and the SHA-256, asks for your explicit "y" in a terminal and installs over a tarball install, keeping the previous binary for `--rollback`; it never restarts the daemon and can never run unattended. Nix, package, Homebrew and container installs are told which command updates them.
 - **Daily release check** (on by default, one anonymous request, `[update] check = false` turns it off): `status`, `doctor` and the web interface tell you when a newer release exists and flag security fixes. It only tells.
 - **Install one-liners for Linux**: a verified installer (`install.sh`, published on the documentation site with its SHA-256) that downloads one pinned release, checks the cosign signature (identity pinned to the release workflow and the exact tag) and the archive SHA-256, and installs to `~/.local/bin` only if everything passes; plus Nix commands and ready-to-paste `.deb`/`.rpm` commands. See the Install page.

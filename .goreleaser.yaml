@@ -122,9 +122,8 @@ signs:
     cmd: cosign
     artifacts: checksum
     output: true
-    args: [sign-blob, --yes, "--output-signature=${signature}", "--output-certificate=${certificate}", "${artifact}"]
-    certificate: "${artifact}.pem"
-    signature: "${artifact}.sig"
+    args: [sign-blob, --yes, "--bundle=${signature}", "${artifact}"]
+    signature: "${artifact}.sigstore.json" # one bundle: signature, certificate and transparency-log proof
 
 # skip_upload: manifests land in dist/ for a human to submit after the release is published (docs/DISTRIBUTION.md)
 scoops:

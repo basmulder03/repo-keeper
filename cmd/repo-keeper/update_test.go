@@ -32,7 +32,7 @@ const fakeELF = "\x7fELF-fake-"
 
 type stubVerifier struct{ err error }
 
-func (s stubVerifier) Verify(context.Context, []byte, []byte, []byte, string, string) error {
+func (s stubVerifier) Verify(context.Context, []byte, []byte, string, string) error {
 	return s.err
 }
 
@@ -77,7 +77,7 @@ func newReleaseSite(t *testing.T, notes6 string) *releaseSite {
 		rel := func(tag, notes string) string {
 			name := "repo-keeper_" + strings.TrimPrefix(tag, "v") + "_linux_amd64.tar.gz"
 			as := ""
-			for _, f := range []string{name, "checksums.txt", "checksums.txt.sig", "checksums.txt.pem"} {
+			for _, f := range []string{name, "checksums.txt", "checksums.txt.sigstore.json"} {
 				as += fmt.Sprintf(`{"name":%q,"browser_download_url":"%s/o/r/releases/download/%s/%s"},`, f, s.srv.URL, tag, f)
 			}
 			return fmt.Sprintf(`{"tag_name":%q,"prerelease":true,"published_at":"2026-10-04T10:00:00Z","html_url":"https://github.com/o/r/releases/tag/%s","body":%q,"assets":[%s]}`, tag, tag, notes, strings.TrimSuffix(as, ","))
@@ -100,8 +100,7 @@ func newReleaseSite(t *testing.T, notes6 string) *releaseSite {
 			sum := sha256.Sum256(arch[tag]) // always the genuine archive's hash, whatever the archive endpoint serves
 			_, _ = fmt.Fprintf(w, "%s  %s\n", hex.EncodeToString(sum[:]), name)
 		})
-		mux.HandleFunc(base+"checksums.txt.sig", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("sig")) })
-		mux.HandleFunc(base+"checksums.txt.pem", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("pem")) })
+		mux.HandleFunc(base+"checksums.txt.sigstore.json", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("bundle")) })
 		mux.HandleFunc("/repos/o/r/commits/"+tag, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"sha":"deadbeefcafe"}`)) })
 	}
 	mux.HandleFunc("/repos/o/r/actions/runs", func(w http.ResponseWriter, _ *http.Request) {
