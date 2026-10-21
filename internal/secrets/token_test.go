@@ -142,4 +142,10 @@ func TestKeyring_Unavailable_PointsAtKeyfile(t *testing.T) {
 	if !errors.Is(err, ErrKeyringUnavailable) || !strings.Contains(err.Error(), "keyfile") || !strings.Contains(err.Error(), "no session bus") {
 		t.Fatalf("err=%v", err)
 	}
+	if err := (Keyring{}).Set("x", New(canary)); !errors.Is(err, ErrKeyringUnavailable) {
+		t.Fatalf("Set err=%v", err)
+	}
+	if err := (Keyring{}).Delete("x"); !errors.Is(err, ErrKeyringUnavailable) {
+		t.Fatalf("Delete err=%v", err)
+	}
 }

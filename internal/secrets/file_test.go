@@ -285,3 +285,47 @@ func TestPassphraseFromKeyFile_LooseKeyMode_Refused(t *testing.T) {
 		t.Fatal("accepted a world-readable key")
 	}
 }
+
+func TestPassphraseFromKeyFile_ConcurrentFirstUse_AllSeeTheSameKey(t *testing.T) {
+	dir := t.TempDir()
+	keyPath, encPath := filepath.Join(dir, "secrets.key"), filepath.Join(dir, "secrets.enc")
+	const n = 8
+	keys := make([]string, n)
+	var wg sync.WaitGroup
+	for i := range keys {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			keys[i], _ = PassphraseFromKeyFile(keyPath, encPath)()
+		}()
+	}
+	wg.Wait()
+	for _, k := range keys {
+		if k == "" || k != keys[0] {
+			t.Fatalf("keys differ or empty: %q", keys)
+		}
+	}
+}
+
+func TestPassphraseFromKeyFile_UnwritableDirectory_Fails(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PassphraseFromKeyFile(filepath.Join(blocker, "secrets.key"), filepath.Join(dir, "secrets.enc"))(); err == nil {
+		t.Fatal("created a key under a regular file")
+	}
+}
+
+func TestEncryptedFile_UnwritableDirectory_SetFails(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f := &EncryptedFile{Path: filepath.Join(blocker, "secrets.enc"), Passphrase: func() (string, error) { return "p", nil }, Iterations: minIter}
+	if err := f.Set("a", New(canary)); err == nil {
+		t.Fatal("saved under a regular file")
+	}
+}
