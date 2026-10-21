@@ -329,3 +329,19 @@ func TestEncryptedFile_UnwritableDirectory_SetFails(t *testing.T) {
 		t.Fatal("saved under a regular file")
 	}
 }
+
+func TestPassphraseFromKeyFile_EmptyOrOversizedKey_Refused(t *testing.T) {
+	for name, content := range map[string]string{"empty": "\n", "oversized": strings.Repeat("a", maxTokenFile+1)} {
+		dir := t.TempDir()
+		keyPath := filepath.Join(dir, "secrets.key")
+		if err := os.WriteFile(keyPath, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := PassphraseFromKeyFile(keyPath, filepath.Join(dir, "secrets.enc"))(); err == nil {
+			t.Errorf("%s key file accepted", name)
+		}
+		if b, _ := os.ReadFile(keyPath); string(b) != content {
+			t.Errorf("%s key file was overwritten", name)
+		}
+	}
+}

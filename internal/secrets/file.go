@@ -93,19 +93,26 @@ func PassphraseFromKeyFile(keyPath, secretsPath string) func() (string, error) {
 		if err := os.MkdirAll(filepath.Dir(keyPath), 0o700); err != nil {
 			return "", err
 		}
-		f, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- own key file
-		if errors.Is(err, os.ErrExist) {
-			t, rerr := readTokenFile(keyPath) // another process created it first
-			return t.Reveal(), rerr
-		}
+		tmp, err := os.CreateTemp(filepath.Dir(keyPath), ".secrets-key-*.tmp") // mode 0600
 		if err != nil {
 			return "", err
 		}
-		if _, err := f.WriteString(key + "\n"); err != nil {
-			_ = f.Close()
+		defer func() { _ = os.Remove(tmp.Name()) }()
+		if _, err := tmp.WriteString(key + "\n"); err != nil {
+			_ = tmp.Close()
 			return "", err
 		}
-		return key, f.Close()
+		if err := tmp.Close(); err != nil {
+			return "", err
+		}
+		// a hard link publishes the finished file atomically and fails if another process got there first
+		if err := os.Link(tmp.Name(), keyPath); errors.Is(err, os.ErrExist) {
+			t, rerr := readTokenFile(keyPath)
+			return t.Reveal(), rerr
+		} else if err != nil {
+			return "", err
+		}
+		return key, nil
 	}
 }
 
