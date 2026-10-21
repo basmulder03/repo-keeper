@@ -2,7 +2,7 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
-## Unreleased
+## 0.1.0-beta.8
 
 ### Fixed
 - **`[general] secrets = "file"` was ignored by the command line**: the program always used the OS keychain, so `accounts add` failed on hosts without one even after the setting was changed. The configured backend is now honoured everywhere.
