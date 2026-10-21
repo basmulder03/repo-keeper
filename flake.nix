@@ -15,12 +15,12 @@
       version = nixpkgs.lib.removeSuffix "\n" (builtins.readFile ./VERSION); # the one tracked copy; scripts/check-version.sh enforces it
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAll = f: nixpkgs.lib.genAttrs systems (s: f nixpkgs.legacyPackages.${s});
-      # go.mod needs 1.26.9 (stdlib CVE fixes); drop this once nixpkgs ships it
-      goFixed = pkgs: if pkgs.lib.versionAtLeast pkgs.go.version "1.26.9" then pkgs.go else pkgs.go.overrideAttrs (_: { # Go version, not repo-keeper
-        version = "1.26.9"; # Go, not repo-keeper
+      # go.mod needs 1.26.10 (stdlib CVE fixes); drop this once nixpkgs ships it
+      goFixed = pkgs: if pkgs.lib.versionAtLeast pkgs.go.version "1.26.10" then pkgs.go else pkgs.go.overrideAttrs (_: { # Go version, not repo-keeper
+        version = "1.26.10"; # Go, not repo-keeper
         src = pkgs.fetchurl {
-          url = "https://go.dev/dl/go1.26.9.src.tar.gz";
-          hash = "sha256-lzXX3Ntls10/pXfwQGRzfAO4nPGitx5uaf4vPG+f1Mo=";
+          url = "https://go.dev/dl/go1.26.10.src.tar.gz";
+          hash = "sha256-/WPog7ovK/ypPBZGsx6+9j4rHk0rMXyXidl2po2B828=";
         };
       });
     in
