@@ -17,6 +17,9 @@ import (
 // ErrNotFound means no secret is stored under that name.
 var ErrNotFound = errors.New("secrets: not found")
 
+// ErrKeyringUnavailable means the OS credential store cannot be reached (typical on WSL and headless hosts).
+var ErrKeyringUnavailable = errors.New(`secrets: no OS keychain available; set [general] secrets = "keyfile" in the config (see docs/INSTALL.md#no-keychain)`)
+
 const keyringService = "repo-keeper"
 
 // Store persists named secrets.
@@ -36,7 +39,7 @@ func (Keyring) Get(name string) (Token, error) {
 		return Token{}, ErrNotFound
 	}
 	if err != nil {
-		return Token{}, fmt.Errorf("secrets: keyring unavailable: %w", err)
+		return Token{}, fmt.Errorf("%w: %w", ErrKeyringUnavailable, err)
 	}
 	return New(v), nil
 }
@@ -44,7 +47,7 @@ func (Keyring) Get(name string) (Token, error) {
 // Set implements Store.
 func (Keyring) Set(name string, t Token) error {
 	if err := keyring.Set(keyringService, name, t.Reveal()); err != nil {
-		return fmt.Errorf("secrets: keyring unavailable: %w", err)
+		return fmt.Errorf("%w: %w", ErrKeyringUnavailable, err)
 	}
 	return nil
 }
@@ -52,7 +55,7 @@ func (Keyring) Set(name string, t Token) error {
 // Delete implements Store; deleting a missing secret is not an error.
 func (Keyring) Delete(name string) error {
 	if err := keyring.Delete(keyringService, name); err != nil && !errors.Is(err, keyring.ErrNotFound) {
-		return fmt.Errorf("secrets: keyring unavailable: %w", err)
+		return fmt.Errorf("%w: %w", ErrKeyringUnavailable, err)
 	}
 	return nil
 }

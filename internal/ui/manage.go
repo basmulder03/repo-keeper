@@ -55,7 +55,7 @@ type AccountForm struct {
 type SettingsForm struct {
 	Root, Interval, Concurrency, PerHost, QuietHours string
 	AllBranches                                      bool
-	Secrets, SecretsFile                             string // keyring | file
+	Secrets, SecretsFile                             string // keyring | file | keyfile
 
 	CleanupMode, MinAge, Protected string
 	AllowNeverPushed               bool

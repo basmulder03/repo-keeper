@@ -71,6 +71,44 @@ func PassphraseFromEnvFile() (string, error) {
 	return t.Reveal(), nil
 }
 
+// PassphraseFromKeyFile returns the random key stored at keyPath, generating it on first use; it refuses to
+// generate one while secretsPath exists, because a fresh key could never open that file.
+func PassphraseFromKeyFile(keyPath, secretsPath string) func() (string, error) {
+	return func() (string, error) {
+		t, err := readTokenFile(keyPath)
+		if err == nil {
+			return t.Reveal(), nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+		if _, serr := os.Lstat(secretsPath); serr == nil {
+			return "", fmt.Errorf("secrets: key file %s is missing but %s exists; restore the key (a new one cannot open it)", keyPath, secretsPath)
+		}
+		raw := make([]byte, 32)
+		if _, err := rand.Read(raw); err != nil {
+			return "", err
+		}
+		key := base64.RawURLEncoding.EncodeToString(raw)
+		if err := os.MkdirAll(filepath.Dir(keyPath), 0o700); err != nil {
+			return "", err
+		}
+		f, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- own key file
+		if errors.Is(err, os.ErrExist) {
+			t, rerr := readTokenFile(keyPath) // another process created it first
+			return t.Reveal(), rerr
+		}
+		if err != nil {
+			return "", err
+		}
+		if _, err := f.WriteString(key + "\n"); err != nil {
+			_ = f.Close()
+			return "", err
+		}
+		return key, f.Close()
+	}
+}
+
 func (f *EncryptedFile) key(pass string, salt []byte, iter int) ([]byte, error) {
 	return pbkdf2.Key(sha256.New, pass, salt, iter, 32)
 }

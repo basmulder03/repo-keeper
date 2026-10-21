@@ -459,19 +459,23 @@ func (a *app) cmdDiscover(ctx context.Context, args []string) int {
 func exists(p string) bool { _, err := os.Lstat(p); return err == nil }
 
 // secretStore picks the secret backend from the configuration: the OS keychain (default) or the
-// passphrase-encrypted file (headless hosts; passphrase from $REPO_KEEPER_PASSPHRASE_FILE).
+// passphrase-encrypted file (headless hosts; passphrase from $REPO_KEEPER_PASSPHRASE_FILE) or the same file under a generated key.
 func (a *app) secretStore(cfg config.Config) secrets.Store {
 	if a.secrets != nil {
 		return a.secrets // injected (tests)
 	}
-	if cfg.General.Secrets == "file" {
+	if cfg.General.Secrets == "file" || cfg.General.Secrets == "keyfile" {
 		p := cfg.General.SecretsFile
 		if p == "" {
 			if dir, err := paths.StateDir(); err == nil {
 				p = filepath.Join(dir, "secrets.enc")
 			}
 		}
-		return &secrets.EncryptedFile{Path: p, Passphrase: secrets.PassphraseFromEnvFile}
+		pass := secrets.PassphraseFromEnvFile
+		if cfg.General.Secrets == "keyfile" {
+			pass = secrets.PassphraseFromKeyFile(filepath.Join(filepath.Dir(p), "secrets.key"), p)
+		}
+		return &secrets.EncryptedFile{Path: p, Passphrase: pass}
 	}
 	return secrets.Keyring{}
 }

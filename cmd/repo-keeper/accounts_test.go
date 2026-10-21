@@ -8,11 +8,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/basmulder03/repo-keeper/internal/clock"
+	"github.com/basmulder03/repo-keeper/internal/config"
 	"github.com/basmulder03/repo-keeper/internal/gitx"
 	"github.com/basmulder03/repo-keeper/internal/gitxtest"
 	"github.com/basmulder03/repo-keeper/internal/secrets"
@@ -246,5 +248,20 @@ func TestAccounts_EncryptedFileBackend_EndToEnd(t *testing.T) {
 	errb.Reset()
 	if code := a.run(ctx, []string{"accounts", "check", "gh", "--config", cfg}); code != 1 || !strings.Contains(errb.String(), "REPO_KEEPER_PASSPHRASE_FILE") {
 		t.Fatalf("without a passphrase: code=%d err=%s", code, errb)
+	}
+}
+
+func TestSecretStore_ConfigChoosesBackend_NoInjection(t *testing.T) {
+	a := newProcessApp()
+	for _, tc := range []struct {
+		mode string
+		want any
+	}{{"", secrets.Keyring{}}, {"keyring", secrets.Keyring{}}, {"file", &secrets.EncryptedFile{}}, {"keyfile", &secrets.EncryptedFile{}}} {
+		var cfg config.Config
+		cfg.General.Secrets = tc.mode
+		cfg.General.SecretsFile = filepath.Join(t.TempDir(), "secrets.enc")
+		if got := a.secretStore(cfg); reflect.TypeOf(got) != reflect.TypeOf(tc.want) {
+			t.Errorf("secrets=%q: got %T, want %T", tc.mode, got, tc.want)
+		}
 	}
 }

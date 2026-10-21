@@ -253,7 +253,7 @@ func until(t time.Time) string {
 
 // secretStoreAt is secretStore with an explicit state directory (the daemon may run with --state-dir).
 func (a *app) secretStoreAt(cfg config.Config, stateDir string) secrets.Store {
-	if a.secrets == nil && cfg.General.Secrets == "file" && cfg.General.SecretsFile == "" {
+	if a.secrets == nil && (cfg.General.Secrets == "file" || cfg.General.Secrets == "keyfile") && cfg.General.SecretsFile == "" {
 		cfg.General.SecretsFile = filepath.Join(stateDir, "secrets.enc")
 	}
 	return a.secretStore(cfg)

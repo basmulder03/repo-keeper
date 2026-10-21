@@ -2,6 +2,14 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
+## Unreleased
+
+### Fixed
+- **`[general] secrets = "file"` was ignored by the command line**: the program always used the OS keychain, so `accounts add` failed on hosts without one even after the setting was changed. The configured backend is now honoured everywhere.
+
+### Added
+- **`secrets = "keyfile"`** (ADR-0023): for WSL and other hosts with no keychain, repo-keeper keeps the secrets in its own encrypted file under a random key it generates on first use (both mode 600 in the state directory, nothing to configure). It is opt-in and never an automatic fallback; the key sits beside the data, so it defeats copying `secrets.enc` alone, not a reader of both as your user. The "no OS keychain" error now names it, and the Settings page offers it.
+
 ## 0.1.0-beta.7
 
 ### Changed
