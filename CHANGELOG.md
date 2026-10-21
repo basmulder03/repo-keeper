@@ -6,6 +6,7 @@ All notable changes are listed here. Versions follow [SemVer](https://semver.org
 
 ### Fixed
 - **Windows: the tray icon was invisible.** The icon is drawn as a PNG, but Windows loads tray icons as `.ico`; the same image is now wrapped in an `.ico` container on Windows (Linux is unchanged).
+- **A UTF-8 byte-order mark at the start of `config.toml` no longer breaks loading** (`invalid character at start of key: U+00EF`). Some Windows editors add one; it is ignored when reading, and the settings page drops it when it rewrites the file.
 
 ## 0.1.0-beta.8
 

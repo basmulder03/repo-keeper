@@ -142,8 +142,12 @@ func Default() Config {
 	}
 }
 
+// StripBOM drops a leading UTF-8 byte-order mark, which Windows editors add and the TOML parser rejects.
+func StripBOM(b []byte) []byte { return bytes.TrimPrefix(b, []byte("\xef\xbb\xbf")) }
+
 // Parse decodes and validates TOML; unknown keys are errors so typos never silently weaken a policy.
 func Parse(b []byte) (Config, error) {
+	b = StripBOM(b)
 	c := Default()
 	dec := toml.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
