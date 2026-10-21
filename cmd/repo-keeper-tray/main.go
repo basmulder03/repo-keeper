@@ -51,7 +51,7 @@ func main() {
 
 func onReady(ctx context.Context, c *tray.Client) {
 	systray.SetTitle("repo-keeper")
-	systray.SetIcon(tray.Icon(tray.Down))
+	systray.SetIcon(tray.PlatformIcon(tray.Down))
 	systray.SetTooltip("repo-keeper")
 
 	line := systray.AddMenuItem("Starting…", "")
@@ -74,7 +74,7 @@ func onReady(ctx context.Context, c *tray.Client) {
 		pause.SetTitle(v.PauseLabel)
 		systray.SetTooltip(v.Tooltip)
 		if v.State != last {
-			systray.SetIcon(tray.Icon(v.State))
+			systray.SetIcon(tray.PlatformIcon(v.State))
 			last = v.State
 		}
 		if v.State == tray.Down {

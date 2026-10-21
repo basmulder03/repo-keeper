@@ -4,11 +4,13 @@ package tray
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
 	"image/png"
+	"runtime"
 	"sync"
 
 	"github.com/basmulder03/repo-keeper/internal/control"
@@ -134,4 +136,27 @@ func Icon(s State) []byte {
 	}
 	iconCache[s] = buf.Bytes()
 	return iconCache[s]
+}
+
+// ICO wraps a 64x64 PNG in a one-image .ico container: Windows loads tray icons as .ico and rejects bare PNG.
+func ICO(pngData []byte) []byte {
+	const size, headerLen = 64, 22
+	b := make([]byte, headerLen, headerLen+len(pngData))
+	binary.LittleEndian.PutUint16(b[2:], 1)   // type: icon
+	binary.LittleEndian.PutUint16(b[4:], 1)   // one image
+	b[6], b[7] = size, size                   // width, height
+	binary.LittleEndian.PutUint16(b[10:], 1)  // colour planes
+	binary.LittleEndian.PutUint16(b[12:], 32) // bits per pixel
+	// #nosec G115 -- a 64x64 PNG is a few KB
+	binary.LittleEndian.PutUint32(b[14:], uint32(len(pngData))) //nolint:gosec // see #nosec above
+	binary.LittleEndian.PutUint32(b[18:], headerLen)            // image data offset
+	return append(b, pngData...)
+}
+
+// PlatformIcon is the icon in the format the OS tray wants: .ico on Windows, PNG elsewhere.
+func PlatformIcon(s State) []byte {
+	if runtime.GOOS == "windows" {
+		return ICO(Icon(s))
+	}
+	return Icon(s)
 }

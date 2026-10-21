@@ -2,6 +2,11 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
+## Unreleased
+
+### Fixed
+- **Windows: the tray icon was invisible.** The icon is drawn as a PNG, but Windows loads tray icons as `.ico`; the same image is now wrapped in an `.ico` container on Windows (Linux is unchanged).
+
 ## 0.1.0-beta.8
 
 ### Fixed
