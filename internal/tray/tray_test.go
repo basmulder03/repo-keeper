@@ -5,6 +5,7 @@ package tray
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"image"
@@ -14,6 +15,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -183,5 +185,34 @@ func TestClient_PicksUpRestartedDaemon(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(c.RuntimeDir, "ui.json"), b, 0o600)
 	if st, err := c.Status(context.Background()); err != nil || st.Repos != 1 {
 		t.Fatalf("st=%+v err=%v", st, err)
+	}
+}
+
+func TestICO_WrapsThePNG_WithAValidHeader(t *testing.T) {
+	for _, s := range []State{OK, Attention, Paused, Down} {
+		p := Icon(s)
+		ico := ICO(p)
+		if len(ico) != 22+len(p) || !bytes.Equal(ico[22:], p) {
+			t.Fatalf("state %v: payload not the PNG", s)
+		}
+		if binary.LittleEndian.Uint16(ico[0:]) != 0 || binary.LittleEndian.Uint16(ico[2:]) != 1 || binary.LittleEndian.Uint16(ico[4:]) != 1 {
+			t.Fatalf("state %v: bad ICONDIR % x", s, ico[:6])
+		}
+		if ico[6] != 64 || ico[7] != 64 || binary.LittleEndian.Uint32(ico[14:]) != uint32(len(p)) || binary.LittleEndian.Uint32(ico[18:]) != 22 {
+			t.Fatalf("state %v: bad ICONDIRENTRY % x", s, ico[6:22])
+		}
+		if img, err := png.Decode(bytes.NewReader(ico[22:])); err != nil || img.Bounds().Dx() != 64 {
+			t.Fatalf("state %v: embedded image: %v", s, err)
+		}
+	}
+}
+
+func TestPlatformIcon_MatchesTheOS(t *testing.T) {
+	got, want := PlatformIcon(OK), Icon(OK)
+	if runtime.GOOS == "windows" {
+		want = ICO(want)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatal("PlatformIcon does not follow runtime.GOOS")
 	}
 }
