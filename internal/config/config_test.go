@@ -304,3 +304,18 @@ func TestStarter_MentionsTheOptOutAndStillParses(t *testing.T) {
 		t.Fatal("the starter config must document the check and its opt-out")
 	}
 }
+
+func TestParse_Utf8BOM_IsIgnored(t *testing.T) {
+	for name, text := range map[string]string{"starter": Starter, "first line is the header": "[general]\nconcurrency = 2\n"} {
+		c, err := Parse(append([]byte("\xef\xbb\xbf"), text...))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if name != "starter" && c.General.Concurrency != 2 {
+			t.Fatalf("%s: %+v", name, c.General)
+		}
+	}
+	if _, err := Parse([]byte("\xef\xbb\xbf[general]\nconcurrnecy = 2\n")); err == nil {
+		t.Fatal("a BOM must not hide an unknown key")
+	}
+}

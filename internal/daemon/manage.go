@@ -50,7 +50,7 @@ func (d *Daemon) plan(fn func(text string) (string, error)) (cur []byte, next st
 	if err != nil {
 		return nil, "", err
 	}
-	next, err = fn(string(cur))
+	next, err = fn(string(config.StripBOM(cur))) // an edit rewrites the file without a byte-order mark
 	if err != nil {
 		return nil, "", asValidation(err)
 	}
