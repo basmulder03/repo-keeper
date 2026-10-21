@@ -126,9 +126,25 @@ repo-keeper update --rollback # put back the version kept before the last update
 
 Installs owned by a package manager do not update themselves: Nix (`nix profile upgrade repo-keeper`, or bump your flake input / Home Manager), `.deb`/`.rpm` (install the newer package), Homebrew, containers. `update` recognises them, says so and prints the right command.
 
+## No keychain (WSL, headless) {#no-keychain}
+
+Without a Secret Service (WSL's default, servers, containers) the default keychain store fails. Let repo-keeper keep the secrets itself:
+
+```toml
+# ~/.config/repo-keeper/config.toml
+[general]
+secrets = "keyfile"
+```
+
+Then `repo-keeper accounts add ...` as usual. The first save generates a random 256-bit key in `secrets.key` and encrypts `secrets.enc` with it (AES-256-GCM); both live in the state directory, mode 600. There is nothing to set up or export, and the daemon needs no environment variable.
+
+What this protects: the secrets file alone (a backup, a synced dotfiles folder, a copied directory) is useless without the key. What it does not: anyone who can read both files as your user can decrypt them, which is also true of an SSH private key. Keep the two out of backups together, or use the OS keychain where you have one. If `secrets.key` is lost, repo-keeper refuses to start a new one while `secrets.enc` exists; add the accounts again after deleting `secrets.enc`.
+
+For a passphrase you manage yourself (agenix, sops-nix, systemd credentials), use `secrets = "file"` with `REPO_KEEPER_PASSPHRASE_FILE`. See ADR-0023.
+
 ## First run
 
 1. `repo-keeper init` writes a starter config.
-2. `repo-keeper accounts add personal --token-stdin < token.txt` (or `--token-file`/`--token-env` without a keychain).
+2. `repo-keeper accounts add personal --token-stdin < token.txt` (or `--token-file`/`--token-env`, or [`secrets = "keyfile"`](#no-keychain), without a keychain).
 3. Set `[general] root = "/path/to/clones"`, check with `repo-keeper discover`.
 4. Start the service, open the interface with `repo-keeper ui`.

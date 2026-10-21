@@ -46,6 +46,7 @@ A structured pass over the whole code base against [THREAT-MODEL](THREAT-MODEL.m
 - Same-user malware can read the keychain session, `/proc/<pid>/environ`, the runtime control token and the session; repo-keeper does not defend against an attacker with your privileges.
 - The session cookie cannot be `Secure` because the origin is `http://127.0.0.1`.
 - Passphrase-encrypted secret file uses PBKDF2-HMAC-SHA256 (600 000 iterations) with AES-256-GCM so it needs no third-party code; Argon2id would resist GPUs better. Prefer the OS keychain, agenix/sops files, or systemd credentials where available.
+- `secrets = "keyfile"` keeps the key beside the secrets file (mode 600, state directory): it defeats copying `secrets.enc` alone, not a reader of both as your user, and is weaker than the OS keychain; it is opt-in and never an automatic fallback (ADR-0023).
 - Case-insensitive filesystems (macOS/Windows) are not handled for repository path collisions; Linux is the supported platform.
 - Provider terms and limits in [PROVIDERS](PROVIDERS.md) still carry *last verified: TBD* and need a human check against the live documents.
 - This was a self-review. An independent review before a 1.0 announcement is recommended.

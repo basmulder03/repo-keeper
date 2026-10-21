@@ -77,4 +77,4 @@ $EDITOR ~/.config/repo-keeper/config.toml   # set [general] root = "/home/you/co
 ./bin/repo-keeper-tray &                    # optional status icon (KDE, waybar/sway, GNOME with AppIndicator)
 ```
 
-No keychain (headless server, container)? Use `--token-file /run/secrets/gh-token` (mode 600) or `--token-env GH_TOKEN` instead of `--token-stdin`.
+No keychain (WSL, headless server, container)? Set `[general] secrets = "keyfile"` ([INSTALL](docs/INSTALL.md#no-keychain)), or use `--token-file /run/secrets/gh-token` (mode 600) or `--token-env GH_TOKEN` instead of `--token-stdin`.

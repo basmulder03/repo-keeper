@@ -76,7 +76,7 @@ type General struct {
 	PerHost     int      `toml:"per_host,omitempty"`     // parallel operations per remote host (default 2)
 	QuietHours  string   `toml:"quiet_hours,omitempty"`  // "23:00-07:00" local time; no scheduled syncs inside
 	AllBranches *bool    `toml:"all_branches,omitempty"` // fetch all branches (default true)
-	Secrets     string   `toml:"secrets,omitempty"`      // keyring (default) | file (passphrase-encrypted; headless hosts)
+	Secrets     string   `toml:"secrets,omitempty"`      // keyring (default) | file (passphrase-encrypted; headless hosts) | keyfile (encrypted under a generated key; WSL)
 	SecretsFile string   `toml:"secrets_file,omitempty"` // default <state dir>/secrets.enc
 	Root        string   `toml:"root,omitempty"`         // clone root for account-discovered repos (absolute)
 }
@@ -203,8 +203,8 @@ func (c Config) Validate() error {
 	if c.Cleanup.MinAge < 0 {
 		bad("cleanup.min_age must not be negative")
 	}
-	if c.General.Secrets != "" && c.General.Secrets != "keyring" && c.General.Secrets != "file" {
-		bad("general.secrets %q must be keyring or file", c.General.Secrets)
+	if c.General.Secrets != "" && c.General.Secrets != "keyring" && c.General.Secrets != "file" && c.General.Secrets != "keyfile" {
+		bad("general.secrets %q must be keyring, file or keyfile", c.General.Secrets)
 	}
 	if c.General.SecretsFile != "" && !isAbs(c.General.SecretsFile) {
 		bad("general.secrets_file must be an absolute path")

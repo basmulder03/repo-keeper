@@ -42,7 +42,7 @@ repo-keeper accounts check personal           # login, scopes, warnings, API quo
 repo-keeper discover                          # what WOULD be cloned: nothing changes yet
 ```
 
-No keychain? Use `--token-file /path/to/token` (mode 600) or set `[general] secrets = "file"` with `REPO_KEEPER_PASSPHRASE_FILE`.
+No keychain (WSL, headless)? Set `[general] secrets = "keyfile"` (nothing else to configure; see INSTALL), or use `--token-file /path/to/token` (mode 600), or `secrets = "file"` with `REPO_KEEPER_PASSPHRASE_FILE`.
 
 ## 3. Phase two: sync one small thing
 

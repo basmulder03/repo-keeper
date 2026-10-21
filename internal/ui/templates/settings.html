@@ -25,11 +25,12 @@
   <p><label for="secrets">Where tokens are stored</label>
     <select id="secrets" name="secrets">
       <option value="keyring"{{if eq .Secrets "keyring"}} selected{{end}}>OS keychain</option>
-      <option value="file"{{if eq .Secrets "file"}} selected{{end}}>Encrypted file (headless hosts)</option>
+      <option value="file"{{if eq .Secrets "file"}} selected{{end}}>Encrypted file, passphrase file (headless hosts)</option>
+      <option value="keyfile"{{if eq .Secrets "keyfile"}} selected{{end}}>Encrypted file, generated key (WSL, no keychain)</option>
     </select>
     <label for="secrets_file">file</label>
     <input id="secrets_file" name="secrets_file" type="text" size="40" value="{{.SecretsFile}}" placeholder="default: state folder / secrets.enc">
-    <span class="muted"><br>The encrypted file needs <code>REPO_KEEPER_PASSPHRASE_FILE</code> set for the daemon. Applied after a restart.</span></p>
+    <span class="muted"><br>The passphrase-file option needs <code>REPO_KEEPER_PASSPHRASE_FILE</code> set for the daemon; the generated-key option needs nothing. Applied after a restart.</span></p>
 </fieldset>
 
 <fieldset class="panel" {{if $.D.ReadOnly}}disabled{{end}}>

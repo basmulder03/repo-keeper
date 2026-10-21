@@ -15,7 +15,6 @@ import (
 	"github.com/basmulder03/repo-keeper/internal/browser"
 	"github.com/basmulder03/repo-keeper/internal/clock"
 	"github.com/basmulder03/repo-keeper/internal/gitx"
-	"github.com/basmulder03/repo-keeper/internal/secrets"
 )
 
 // Set at build time via -ldflags "-X main.version=...".
@@ -30,8 +29,12 @@ func main() {
 	if os.Getenv(askpass.EnvMarker) == "1" { // git is asking for credentials: act as the helper
 		os.Exit(askpass.Run(os.Args[1:], os.Getenv, os.Stdout))
 	}
-	a := &app{out: os.Stdout, err: os.Stderr, in: os.Stdin, secrets: secrets.Keyring{}, newRunner: gitx.New, clock: clock.Real{}, openBrowser: browser.Open, reexec: reexecSelf}
-	os.Exit(a.run(ctx, os.Args[1:]))
+	os.Exit(newProcessApp().run(ctx, os.Args[1:]))
+}
+
+// newProcessApp wires the real process; secrets stays nil so the backend follows general.secrets (tests inject one).
+func newProcessApp() *app {
+	return &app{out: os.Stdout, err: os.Stderr, in: os.Stdin, newRunner: gitx.New, clock: clock.Real{}, openBrowser: browser.Open, reexec: reexecSelf}
 }
 
 // run dispatches subcommands and returns the process exit code.

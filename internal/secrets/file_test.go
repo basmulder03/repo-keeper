@@ -224,3 +224,124 @@ func FuzzDecrypt_ArbitraryFiles_NeverPanic(f *testing.F) {
 	cheap := func(string, []byte, int) ([]byte, error) { return make([]byte, 32), nil } // fuzzing must not spend 100k PBKDF2 rounds per input
 	f.Fuzz(func(t *testing.T, data []byte) { _, _ = decrypt(data, "p", cheap) })
 }
+
+func TestPassphraseFromKeyFile_FirstUse_CreatesPrivateStableKey(t *testing.T) {
+	dir := t.TempDir()
+	keyPath, encPath := filepath.Join(dir, "state", "secrets.key"), filepath.Join(dir, "state", "secrets.enc")
+	pass := PassphraseFromKeyFile(keyPath, encPath)
+	first, err := pass()
+	if err != nil || len(first) < 40 {
+		t.Fatalf("key=%q err=%v", first, err)
+	}
+	if again, err := pass(); err != nil || again != first {
+		t.Fatalf("key changed: %q %v", again, err)
+	}
+	if runtime.GOOS != "windows" {
+		if st, _ := os.Stat(keyPath); st.Mode().Perm() != 0o600 {
+			t.Fatalf("key mode %v", st.Mode().Perm())
+		}
+	}
+	f := &EncryptedFile{Path: encPath, Passphrase: pass, Iterations: minIter}
+	if err := f.Set("account/ado", New(canary)); err != nil {
+		t.Fatal(err)
+	}
+	reopened := &EncryptedFile{Path: encPath, Passphrase: PassphraseFromKeyFile(keyPath, encPath), Iterations: minIter}
+	if got, err := reopened.Get("account/ado"); err != nil || got.Reveal() != canary {
+		t.Fatalf("got=%v err=%v", got, err)
+	}
+	raw, _ := os.ReadFile(encPath)
+	if bytes.Contains(raw, []byte(canary)) || bytes.Contains(raw, []byte(first)) {
+		t.Fatal("secrets file leaks the token or the key")
+	}
+}
+
+func TestPassphraseFromKeyFile_SecretsFileWithoutKey_RefusesAndKeepsFile(t *testing.T) {
+	dir := t.TempDir()
+	keyPath, encPath := filepath.Join(dir, "secrets.key"), filepath.Join(dir, "secrets.enc")
+	if err := os.WriteFile(encPath, []byte("sealed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PassphraseFromKeyFile(keyPath, encPath)(); err == nil {
+		t.Fatal("generated a key that can never open the existing secrets file")
+	}
+	if _, err := os.Stat(keyPath); err == nil {
+		t.Fatal("key file was created anyway")
+	}
+	if b, _ := os.ReadFile(encPath); string(b) != "sealed" {
+		t.Fatal("secrets file touched")
+	}
+}
+
+func TestPassphraseFromKeyFile_LooseKeyMode_Refused(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no unix modes")
+	}
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "secrets.key")
+	if err := os.WriteFile(keyPath, []byte("abc\n"), 0o644); err != nil { // #nosec G306 -- the point of the test
+		t.Fatal(err)
+	}
+	if _, err := PassphraseFromKeyFile(keyPath, filepath.Join(dir, "secrets.enc"))(); err == nil {
+		t.Fatal("accepted a world-readable key")
+	}
+}
+
+func TestPassphraseFromKeyFile_ConcurrentFirstUse_AllSeeTheSameKey(t *testing.T) {
+	dir := t.TempDir()
+	keyPath, encPath := filepath.Join(dir, "secrets.key"), filepath.Join(dir, "secrets.enc")
+	const n = 8
+	keys := make([]string, n)
+	var wg sync.WaitGroup
+	for i := range keys {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			keys[i], _ = PassphraseFromKeyFile(keyPath, encPath)()
+		}()
+	}
+	wg.Wait()
+	for _, k := range keys {
+		if k == "" || k != keys[0] {
+			t.Fatalf("keys differ or empty: %q", keys)
+		}
+	}
+}
+
+func TestPassphraseFromKeyFile_UnwritableDirectory_Fails(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PassphraseFromKeyFile(filepath.Join(blocker, "secrets.key"), filepath.Join(dir, "secrets.enc"))(); err == nil {
+		t.Fatal("created a key under a regular file")
+	}
+}
+
+func TestEncryptedFile_UnwritableDirectory_SetFails(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f := &EncryptedFile{Path: filepath.Join(blocker, "secrets.enc"), Passphrase: func() (string, error) { return "p", nil }, Iterations: minIter}
+	if err := f.Set("a", New(canary)); err == nil {
+		t.Fatal("saved under a regular file")
+	}
+}
+
+func TestPassphraseFromKeyFile_EmptyOrOversizedKey_Refused(t *testing.T) {
+	for name, content := range map[string]string{"empty": "\n", "oversized": strings.Repeat("a", maxTokenFile+1)} {
+		dir := t.TempDir()
+		keyPath := filepath.Join(dir, "secrets.key")
+		if err := os.WriteFile(keyPath, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := PassphraseFromKeyFile(keyPath, filepath.Join(dir, "secrets.enc"))(); err == nil {
+			t.Errorf("%s key file accepted", name)
+		}
+		if b, _ := os.ReadFile(keyPath); string(b) != content {
+			t.Errorf("%s key file was overwritten", name)
+		}
+	}
+}
