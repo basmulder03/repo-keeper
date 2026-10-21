@@ -7,6 +7,9 @@ All notable changes are listed here. Versions follow [SemVer](https://semver.org
 ### Fixed
 - **`[general] secrets = "file"` was ignored by the command line**: the program always used the OS keychain, so `accounts add` failed on hosts without one even after the setting was changed. The configured backend is now honoured everywhere.
 
+### Security
+- Built with Go 1.26.10, which fixes GO-2026-6809 (`crypto/x509` trusted compromised intermediate certificates); the tray's HTTP client reached the affected code.
+
 ### Added
 - **`secrets = "keyfile"`** (ADR-0023): for WSL and other hosts with no keychain, repo-keeper keeps the secrets in its own encrypted file under a random key it generates on first use (both mode 600 in the state directory, nothing to configure). It is opt-in and never an automatic fallback; the key sits beside the data, so it defeats copying `secrets.enc` alone, not a reader of both as your user. The "no OS keychain" error now names it, and the Settings page offers it.
 
