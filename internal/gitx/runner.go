@@ -120,6 +120,8 @@ var allowedEnv = map[string]bool{
 	"PATH": true, "HOME": true, "USER": true, "LOGNAME": true, "TMPDIR": true, "LANG": true,
 	"SSH_AUTH_SOCK": true, "XDG_CONFIG_HOME": true, "XDG_RUNTIME_DIR": true, "XDG_DATA_HOME": true,
 	"SYSTEMROOT": true, "USERPROFILE": true, "APPDATA": true, "LOCALAPPDATA": true, "TEMP": true, "TMP": true,
+	// Windows OpenSSH resolves the user, home and ssh-agent pipe from these.
+	"USERNAME": true, "USERDOMAIN": true, "HOMEDRIVE": true, "HOMEPATH": true, "WINDIR": true, "PROGRAMDATA": true,
 	"HTTPS_PROXY": true, "HTTP_PROXY": true, "NO_PROXY": true, "SSL_CERT_FILE": true, "SSL_CERT_DIR": true,
 }
 
