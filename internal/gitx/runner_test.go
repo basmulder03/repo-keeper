@@ -37,7 +37,7 @@ func TestVersion_AtLeast_Ordering(t *testing.T) {
 func TestBuildEnv_DropsSecretsAndGitVars_KeepsHardening(t *testing.T) {
 	base := []string{
 		"PATH=/bin", "HOME=/h", "GITHUB_TOKEN=CANARY", "GIT_DIR=/evil", "GIT_SSH_COMMAND=evil",
-		"GIT_ASKPASS=evil", "AWS_SECRET_ACCESS_KEY=CANARY",
+		"GIT_ASKPASS=evil", "AWS_SECRET_ACCESS_KEY=CANARY", "USERNAME=bas", "HOMEPATH=/h",
 	}
 	env := strings.Join(buildEnv(base, []string{"HOME=/override"}), "\n")
 	for _, bad := range []string{"CANARY", "GIT_DIR", "GIT_SSH_COMMAND", "GIT_ASKPASS"} {
@@ -45,7 +45,7 @@ func TestBuildEnv_DropsSecretsAndGitVars_KeepsHardening(t *testing.T) {
 			t.Errorf("env leaks %s:\n%s", bad, env)
 		}
 	}
-	for _, want := range []string{"PATH=/bin", "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0", "core.hooksPath", "core.fsmonitor"} {
+	for _, want := range []string{"PATH=/bin", "USERNAME=bas", "HOMEPATH=/h", "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0", "core.hooksPath", "core.fsmonitor"} {
 		if !strings.Contains(env, want) {
 			t.Errorf("env missing %s", want)
 		}

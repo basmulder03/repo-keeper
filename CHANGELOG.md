@@ -2,6 +2,14 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
+## Unreleased
+
+### Fixed
+- **Windows: cloning over SSH failed with `Host key verification failed`.** git now also receives `USERNAME`, `HOMEDRIVE`, `HOMEPATH` and a few other Windows variables OpenSSH needs to find your home folder and `known_hosts` (#57).
+
+### Added
+- **Debug page: "Report a problem on GitHub".** Opens a prefilled bug report (version, OS, git and ssh, the last failed git command, recent errors) in your browser. Hosts, users, repository names and your home folder are masked, nothing is sent until you submit the issue yourself.
+
 ## 0.1.0-beta.9
 
 ### Fixed

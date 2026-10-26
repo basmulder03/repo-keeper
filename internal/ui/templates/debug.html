@@ -10,6 +10,7 @@
   <dt>UI address</dt><dd><code>{{.Info.UIAddr}}</code></dd>
   <dt>Daemon started</dt><dd>{{stamp .Info.Started}}</dd>
 </dl>
+<p><a class="btn" href="{{.D.ReportURL}}" target="_blank" rel="noopener noreferrer">Report a problem on GitHub</a> <span class="muted">Opens a prefilled issue on github.com. Hosts, users and repository names are masked; check the text before you submit.</span></p>
 <p><a class="btn" href="/debug/bundle.json" download>Download diagnostics bundle</a> <span class="muted">JSON with state, events, git command log and configuration. Secrets are never included.</span></p>
 </div>
 

@@ -445,7 +445,8 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request, si sessionI
 	for i, j := 0, len(cmds)-1; i < j; i, j = i+1, j-1 { // newest first
 		cmds[i], cmds[j] = cmds[j], cmds[i]
 	}
-	s.render(w, r, si, "debug", "Debug", "debug", map[string]any{"Events": ev, "Commands": cmds, "Hosts": s.Backend.Hosts()})
+	s.render(w, r, si, "debug", "Debug", "debug", map[string]any{"Events": ev, "Commands": cmds, "Hosts": s.Backend.Hosts(),
+		"ReportURL": reportURL(s.Backend.Info(), cmds, ev)})
 }
 
 func (s *Server) handleBundle(w http.ResponseWriter, r *http.Request, _ sessionInfo) {
