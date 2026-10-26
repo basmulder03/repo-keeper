@@ -2,7 +2,7 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
-## Unreleased
+## 0.1.0-beta.11
 
 ### Fixed
 - **Windows: a repository that was just released by a sync could fail with an internal error ("Access is denied" on `repo-keeper.lock`) instead of being reported as busy.** It is now treated as locked and retried.
