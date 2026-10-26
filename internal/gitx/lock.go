@@ -31,6 +31,11 @@ func (g *Repo) Lock(ctx context.Context) (func(), error) {
 			_ = f.Close()
 			return func() { _ = os.Remove(p) }, nil
 		}
+		if errors.Is(err, os.ErrPermission) { // Windows reports a just-released, delete-pending lock as access denied
+			if _, serr := os.Stat(p); serr == nil || errors.Is(serr, os.ErrPermission) {
+				return nil, ErrLocked
+			}
+		}
 		if !errors.Is(err, os.ErrExist) {
 			return nil, err
 		}
