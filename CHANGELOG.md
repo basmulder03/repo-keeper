@@ -5,6 +5,7 @@ All notable changes are listed here. Versions follow [SemVer](https://semver.org
 ## 0.1.0-beta.10
 
 ### Fixed
+- **Windows: a repository that was just released by a sync could fail with an internal error ("Access is denied" on `repo-keeper.lock`) instead of being reported as busy.** It is now treated as locked and retried.
 - **Windows: cloning over SSH failed with `Host key verification failed`.** git now also receives `USERNAME`, `HOMEDRIVE`, `HOMEPATH` and a few other Windows variables OpenSSH needs to find your home folder and `known_hosts` (#57).
 
 ### Added
