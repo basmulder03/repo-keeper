@@ -2,7 +2,7 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
-## Unreleased
+## 0.1.0-beta.12
 
 ### Fixed
 - **Windows: every git command opened a console window in the foreground**, which made the screen unusable during an initial sync. git (and the ssh it starts) now runs in a hidden console (#64).
