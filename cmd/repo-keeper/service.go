@@ -5,7 +5,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -109,7 +111,7 @@ func utf16le(v string) []byte {
 	b := make([]byte, 0, 2+2*len(u))
 	b = append(b, 0xFF, 0xFE) // BOM; schtasks rejects UTF-8 task files
 	for _, c := range u {
-		b = append(b, byte(c), byte(c>>8))
+		b = binary.LittleEndian.AppendUint16(b, c)
 	}
 	return b
 }
@@ -151,8 +153,8 @@ func (s *svc) install(ctx context.Context) (string, error) {
 		}
 		defer func() { _ = os.Remove(f.Name()) }()
 		_, werr := f.Write(utf16le(s.taskXML()))
-		if cerr := f.Close(); werr != nil || cerr != nil {
-			return "", fmt.Errorf("write task file: %v %v", werr, cerr)
+		if err := errors.Join(werr, f.Close()); err != nil {
+			return "", fmt.Errorf("write task file: %w", err)
 		}
 		if err := s.run(ctx, "schtasks", "/Create", "/TN", serviceName, "/XML", f.Name(), "/F"); err != nil {
 			return "", err
