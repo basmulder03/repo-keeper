@@ -13,3 +13,6 @@ body:
     id: what
     attributes: { label: What happened, description: "Expected vs actual. Never paste tokens; run `repo-keeper doctor` output only after checking it." }
     validations: { required: true }
+  - type: textarea
+    id: debug
+    attributes: { label: Debug details, description: "Filled in by the UI's bug-report link; check it before submitting." }

@@ -65,13 +65,14 @@ func reportURL(info Info, cmds []gitx.CommandRecord, events []store.Event) strin
 			n++
 		}
 	}
-	what, r := b.String(), []rune(b.String())
+	// Debug data goes in its own field: GitHub resets prefilled fields shortly after load, so "what" stays empty for the user.
+	debug, r := b.String(), []rune(b.String())
 	for {
-		q := url.Values{"template": {"bug_report.yml"}, "version": {info.Version}, "env": {env}, "what": {what}}
+		q := url.Values{"template": {"bug_report.yml"}, "version": {info.Version}, "env": {env}, "debug": {debug}}
 		if link := issueNewURL + "?" + q.Encode(); len(link) <= reportMaxURL {
 			return link
 		}
 		r = r[:len(r)*3/4]
-		what = string(r) + "\n(truncated)"
+		debug = string(r) + "\n(truncated)"
 	}
 }
