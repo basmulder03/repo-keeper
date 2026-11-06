@@ -17,7 +17,7 @@ Shipped now (Linux; Windows zips are built by GoReleaser and installed through w
 
 Planned: Homebrew tap, AUR, container image (headless servers). See [INSTALL](INSTALL.md).
 
-`repo-keeper install-service` / `uninstall-service` register per-user autostart using **official** mechanisms only: systemd `--user`, launchd LaunchAgent, Windows Task Scheduler (per-user, "at logon"). No registry Run-key hacks beyond that, no admin, no drivers, no services running as SYSTEM.
+`repo-keeper install-service` / `uninstall-service` register per-user autostart using **official** mechanisms only: systemd `--user` (unit in `~/.config/systemd/user`), launchd LaunchAgent, Windows Task Scheduler (per-user logon trigger, no admin). No registry Run-key hacks, no drivers, no services running as SYSTEM. `repo-keeper autostart` shows whether the daemon is running and registered. The command is user-run only; nothing registers autostart implicitly.
 
 ## Why AV might flag us, and what we do about it
 Behaviours that heuristics associate with malware: background persistence, reading credential stores, outbound network, spawning `git`, unsigned Go binaries (Go binaries are a common false-positive target).
