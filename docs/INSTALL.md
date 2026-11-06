@@ -34,7 +34,7 @@ scoop bucket add repo-keeper https://github.com/basmulder03/scoop-bucket
 scoop install repo-keeper
 ```
 
-Then `repo-keeper install-service` registers the per-user Task Scheduler autostart. Both routes verify the archive hash. The zip on each GitHub release is signed through `checksums.txt` with cosign, like the Linux tarball.
+Then `repo-keeper install-service` registers a per-user Task Scheduler task that starts the daemon at logon (no admin; `repo-keeper uninstall-service` removes it). Both routes verify the archive hash. The zip on each GitHub release is signed through `checksums.txt` with cosign, like the Linux tarball.
 
 Debian, Ubuntu and Fedora packages are in the next sections; the Install page of the documentation site shows ready-to-paste commands pinned to the newest published release.
 

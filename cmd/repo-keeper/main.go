@@ -63,6 +63,10 @@ func (a *app) run(ctx context.Context, args []string) int {
 		return a.cmdRestart(ctx, rest)
 	case "status":
 		return a.cmdStatus(ctx, rest)
+	case "install-service", "uninstall-service":
+		return a.cmdService(ctx, args[0], rest)
+	case "autostart":
+		return a.cmdAutostart(ctx, rest)
 	case "init":
 		return a.cmdInit(ctx, rest)
 	case "config":
@@ -99,6 +103,8 @@ Commands:
   daemon                        run the background service (scheduled syncs)
   start | stop | restart        run the daemon detached in the background (no service manager needed)
   status                        show tracked repositories and their last sync
+  install-service | uninstall-service   register / remove per-user autostart (systemd, launchd, Task Scheduler)
+  autostart                     show whether the daemon is running and starts at login
   ui                            open the web interface (signs in with a one-time link)
   accounts add|list|check|rm    manage platform logins (tokens live in the OS keychain)
   discover                      list what each account would clone (no changes)
