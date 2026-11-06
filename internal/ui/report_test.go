@@ -23,7 +23,7 @@ func TestReportURL_FailedClone_PrefillsAndRedacts(t *testing.T) {
 	if err != nil || u.Host != "github.com" || u.Query().Get("template") != "bug_report.yml" || u.Query().Get("version") != "1.2.3" {
 		t.Fatalf("bad link %q: %v", raw, err)
 	}
-	what := u.Query().Get("what")
+	what := u.Query().Get("debug")
 	for _, bad := range []string{"CANARYHOST", "CANARYORG", "ghp_"} {
 		if strings.Contains(what, bad) {
 			t.Errorf("leaks %s:\n%s", bad, what)
