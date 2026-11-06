@@ -2,7 +2,7 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
-## Unreleased
+## 0.1.0-beta.13
 
 ### Added
 - **`repo-keeper install-service` / `uninstall-service`: start the daemon at login, without admin rights.** Linux registers a systemd user unit, macOS a LaunchAgent, Windows a Task Scheduler logon task for the current user. Run it yourself; nothing registers autostart on its own (#72).
