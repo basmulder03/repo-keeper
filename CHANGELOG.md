@@ -2,6 +2,12 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
+## Unreleased
+
+### Fixed
+- **Windows: every git command opened a console window in the foreground**, which made the screen unusable during an initial sync. git (and the ssh it starts) now runs in a hidden console (#64).
+- **"Report a problem on GitHub": the "What happened" field could not be edited**, because GitHub keeps resetting prefilled fields to the link's value. The debug data now goes in a separate "Debug details" field and "What happened" starts empty (#64).
+
 ## 0.1.0-beta.11
 
 ### Fixed

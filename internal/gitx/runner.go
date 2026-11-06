@@ -180,6 +180,7 @@ func (r *Runner) RunEnv(ctx context.Context, dir string, extra []string, args ..
 	// #nosec G204 -- the one sanctioned exec site; no shell, args built by gitx
 	cmd := exec.CommandContext(ctx, r.Bin, args...) //nolint:forbidigo,gosec // see #nosec above
 	cmd.Dir = dir
+	hideConsole(cmd)
 	cmd.Env = buildEnv(os.Environ(), append(append([]string{}, r.Env...), extra...))
 	var stdout, stderr limitedBuffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
