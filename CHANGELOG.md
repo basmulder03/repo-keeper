@@ -2,7 +2,7 @@
 
 All notable changes are listed here. Versions follow [SemVer](https://semver.org); `0.x` means the configuration file, CLI and UI may still change between releases (breaking changes are called out).
 
-## Unreleased
+## 0.1.0-beta.14
 
 ### Security
 - **Built with Go 1.26.11, which fixes GO-2026-6859** (`net/http`: an HTTP/1 server crash caused by a `MaxBytesReader` header race). The web UI's loopback server is an HTTP/1 server, so this build is worth updating to promptly (#79).
