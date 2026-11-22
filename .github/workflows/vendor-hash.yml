@@ -1,0 +1,32 @@
+# Dependabot edits go.mod/go.sum but cannot recompute flake.nix's vendorHash; this does, so the `nix` check passes.
+name: vendor-hash
+on:
+  pull_request:
+    paths: ["go.mod", "go.sum"]
+permissions:
+  contents: read
+jobs:
+  refresh:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      # A PAT/App token (Dependabot secret VENDOR_HASH_TOKEN) is needed so the pushed commit re-triggers CI; GITHUB_TOKEN pushes do not.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.VENDOR_HASH_TOKEN }}
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+      - name: Recompute vendorHash
+        run: |
+          sed -i -E 's|vendorHash = "[^"]*"|vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="|' flake.nix
+          out=$(nix build .#default --no-link 2>&1 || true)
+          hash=$(grep -oE 'got: +sha256-[A-Za-z0-9+/]+=' <<<"$out" | grep -oE 'sha256-.*' | head -n1)
+          [ -n "$hash" ] || { echo "$out" | tail -n 30; echo "no hash found" >&2; exit 1; }
+          sed -i -E "s|vendorHash = \"[^\"]*\"|vendorHash = \"$hash\"|" flake.nix
+      - name: Commit if changed
+        run: |
+          git diff --quiet -- flake.nix && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(nix): refresh vendorHash" -- flake.nix
+          git push
