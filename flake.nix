@@ -30,7 +30,7 @@
           pname = "repo-keeper";
           inherit version;
           src = ./.;
-          vendorHash = "sha256-rxs35TNzu6w3I40sF/kjSk2Y/LBXxyrMtmMmnU42vW0=";
+          vendorHash = "sha256-IbW7398YZsKe1VaSIDOrMqWBCzqtldAMGI2R053XVoY=";
           env.CGO_ENABLED = 0;
           subPackages = [ "cmd/repo-keeper" "cmd/repo-keeper-tray" ];
           ldflags = [ "-s" "-w" "-X main.version=${version}" "-X main.commit=${self.shortRev or self.dirtyShortRev or "dev"}" ];
